@@ -29,7 +29,7 @@ export class TranslationService {
            Arabic place: ${arabicText}`;
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4o-mini', // Fast and cheap for simple tasks
+        model: 'gpt-5-nano',
         messages: [
           {
             role: 'system',
@@ -40,8 +40,6 @@ export class TranslationService {
             content: prompt
           }
         ],
-        max_tokens: 100,
-        temperature: 0.1, // Low temperature for consistent results
       });
 
       const result = response.choices[0]?.message?.content?.trim() || arabicText;

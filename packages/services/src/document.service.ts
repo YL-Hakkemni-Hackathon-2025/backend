@@ -10,6 +10,7 @@ import {
 } from '@hakkemni/dto';
 import { NotFoundError, DocumentType } from '@hakkemni/common';
 import { aiService } from './ai.service';
+import { storageService } from './storage.service';
 
 export class DocumentService {
   /**
@@ -18,24 +19,27 @@ export class DocumentService {
   async uploadAndProcess(
     userId: string,
     dto: UploadDocumentDto,
-    fileUrl: string,
+    fileUrl: string, // This parameter is now ignored, we generate our own
     fileContent: Buffer
   ): Promise<DocumentUploadResponseDto> {
-    // Process document with AI to extract information
-    console.log(userId);
-    console.log(dto);
-    console.log(fileUrl);
-    console.log(fileContent);
+    // Upload file to Google Cloud Storage with randomized name
+    const { gcsPath, signedUrl } = await storageService.uploadFile(
+      fileContent,
+      dto.originalFileName,
+      dto.mimeType,
+      userId
+    );
 
+    // Process document with AI to extract information
     const aiSuggestions = await aiService.processDocument(fileContent, dto.mimeType);
 
-    // Create document record with AI suggestions
+    // Create document record with AI suggestions and GCS path
     const document = await MedicalDocumentModel.create({
       userId,
       originalFileName: dto.originalFileName,
       documentName: aiSuggestions.suggestedName,
       documentType: aiSuggestions.documentType,
-      fileUrl,
+      fileUrl: gcsPath, // Store GCS path, not signed URL (signed URLs expire)
       mimeType: dto.mimeType,
       fileSize: dto.fileSize,
       documentDate: aiSuggestions.suggestedDate,
@@ -51,7 +55,7 @@ export class DocumentService {
     return {
       id: document._id.toString(),
       originalFileName: document.originalFileName,
-      fileUrl: document.fileUrl,
+      fileUrl: signedUrl, // Return signed URL to client
       aiSuggestions: {
         suggestedName: aiSuggestions.suggestedName,
         suggestedDate: aiSuggestions.suggestedDate || undefined,
@@ -85,7 +89,7 @@ export class DocumentService {
       throw new NotFoundError('Document not found');
     }
 
-    return this.toResponseDto(document);
+    return this.toResponseDtoAsync(document);
   }
 
   /**
@@ -97,7 +101,9 @@ export class DocumentService {
       query.isConfirmed = true;
     }
     const documents = await MedicalDocumentModel.find(query).sort({ createdAt: -1 });
-    return documents.map(d => this.toResponseDto(d));
+
+    // Generate signed URLs for all documents in parallel
+    return Promise.all(documents.map(d => this.toResponseDtoAsync(d)));
   }
 
   /**
@@ -108,7 +114,7 @@ export class DocumentService {
     if (!document) {
       throw new NotFoundError('Document not found');
     }
-    return this.toResponseDto(document);
+    return this.toResponseDtoAsync(document);
   }
 
   /**
@@ -125,7 +131,7 @@ export class DocumentService {
       throw new NotFoundError('Document not found');
     }
 
-    return this.toResponseDto(document);
+    return this.toResponseDtoAsync(document);
   }
 
   /**
@@ -160,6 +166,46 @@ export class DocumentService {
     }));
   }
 
+  /**
+   * Convert document to response DTO with signed URL
+   */
+  private async toResponseDtoAsync(document: MedicalDocument): Promise<DocumentResponseDto> {
+    // Generate a fresh signed URL for the document
+    let signedUrl = document.fileUrl;
+
+    // Check if fileUrl looks like a GCS path (not a full URL)
+    if (document.fileUrl && !document.fileUrl.startsWith('http')) {
+      try {
+        signedUrl = await storageService.generateSignedUrl(document.fileUrl, 'read');
+      } catch (error) {
+        console.error('Failed to generate signed URL:', error);
+        // Keep the original path if signing fails
+      }
+    }
+
+    return {
+      id: document._id.toString(),
+      userId: document.userId.toString(),
+      originalFileName: document.originalFileName,
+      documentName: document.documentName,
+      documentType: document.documentType as DocumentType,
+      fileUrl: signedUrl,
+      mimeType: document.mimeType,
+      fileSize: document.fileSize,
+      documentDate: document.documentDate,
+      notes: document.notes,
+      isAiProcessed: document.isAiProcessed,
+      isConfirmed: document.isConfirmed,
+      isActive: document.isActive,
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt
+    };
+  }
+
+  /**
+   * Sync version for backwards compatibility (doesn't refresh signed URLs)
+   * @deprecated Use toResponseDtoAsync instead
+   */
   private toResponseDto(document: MedicalDocument): DocumentResponseDto {
     return {
       id: document._id.toString(),

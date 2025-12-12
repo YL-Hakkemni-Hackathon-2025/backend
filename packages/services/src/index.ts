@@ -11,4 +11,5 @@ export * from './lebanese-id.service';
 export * from './ai.service';
 export * from './qr-code.service';
 export * from './translation.service';
+export * from './storage.service';
 
