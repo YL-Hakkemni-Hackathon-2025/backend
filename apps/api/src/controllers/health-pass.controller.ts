@@ -56,6 +56,21 @@ export class HealthPassController {
       next(error);
     }
   }
+
+  async toggleItem(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { itemType, itemId, isEnabled } = req.body;
+      const healthPass = await healthPassService.toggleItem(
+        req.params.id,
+        itemType,
+        itemId,
+        isEnabled
+      );
+      res.json({ success: true, data: healthPass });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const healthPassController = new HealthPassController();

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { healthPassController } from '../controllers';
 import { validateBody, validateParams } from '../middleware/validate';
-import { CreateHealthPassDto, UpdateHealthPassDto, IdParamDto } from '@hakkemni/dto';
+import { CreateHealthPassDto, UpdateHealthPassDto, IdParamDto, ToggleHealthPassItemDto } from '@hakkemni/dto';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -241,6 +241,58 @@ router.post(
   '/:id/regenerate-qr',
   validateParams(IdParamDto),
   healthPassController.regenerateQr.bind(healthPassController)
+);
+
+/**
+ * @openapi
+ * /health-passes/{id}/toggle-item:
+ *   patch:
+ *     tags: [Health Passes]
+ *     summary: Toggle a specific item in the health pass
+ *     description: Enable or disable a specific medical condition, medication, allergy, lifestyle, or document in the health pass.
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [itemType, itemId, isEnabled]
+ *             properties:
+ *               itemType:
+ *                 type: string
+ *                 enum: [medicalCondition, medication, allergy, lifestyle, document]
+ *                 description: Type of the item to toggle
+ *               itemId:
+ *                 type: string
+ *                 description: ID of the specific item
+ *               isEnabled:
+ *                 type: boolean
+ *                 description: Whether to enable (true) or disable (false) the item
+ *     responses:
+ *       200:
+ *         description: Health pass updated with toggled item
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   description: Updated health pass with all items
+ */
+router.patch(
+  '/:id/toggle-item',
+  validateParams(IdParamDto),
+  validateBody(ToggleHealthPassItemDto),
+  healthPassController.toggleItem.bind(healthPassController)
 );
 
 export { router as healthPassRouter };

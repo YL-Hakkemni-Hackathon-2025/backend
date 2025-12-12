@@ -190,3 +190,23 @@ export class QrCodeDataDto {
   expiresAt!: Date;
 }
 
+// DTO for toggling a specific item
+export enum HealthPassItemType {
+  MEDICAL_CONDITION = 'medicalCondition',
+  MEDICATION = 'medication',
+  ALLERGY = 'allergy',
+  LIFESTYLE = 'lifestyle',
+  DOCUMENT = 'document'
+}
+
+export class ToggleHealthPassItemDto {
+  @IsEnum(HealthPassItemType)
+  itemType!: HealthPassItemType;
+
+  @IsString()
+  itemId!: string;
+
+  @IsBoolean()
+  isEnabled!: boolean;
+}
+

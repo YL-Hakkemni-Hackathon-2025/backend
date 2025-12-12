@@ -285,6 +285,65 @@ export class HealthPassService {
     return newQrCode;
   }
 
+  /**
+   * Toggle a specific item in a health pass
+   * @param id Health pass ID
+   * @param itemType Type of item (medicalCondition, medication, allergy, lifestyle, document)
+   * @param itemId ID of the specific item
+   * @param isEnabled Whether to enable or disable the item
+   */
+  async toggleItem(
+    id: string,
+    itemType: 'medicalCondition' | 'medication' | 'allergy' | 'lifestyle' | 'document',
+    itemId: string,
+    isEnabled: boolean
+  ): Promise<HealthPassResponseDto> {
+    const healthPass = await HealthPassModel.findById(id);
+    if (!healthPass) {
+      throw new NotFoundError('Health pass not found');
+    }
+
+    // Map item type to the corresponding array field in dataToggles
+    const fieldMap: Record<string, string> = {
+      medicalCondition: 'specificConditions',
+      medication: 'specificMedications',
+      allergy: 'specificAllergies',
+      lifestyle: 'specificLifestyles',
+      document: 'specificDocuments'
+    };
+
+    const field = fieldMap[itemType];
+    if (!field) {
+      throw new Error('Invalid item type');
+    }
+
+    const currentToggles = healthPass.dataToggles || {};
+    const currentArray: string[] = (currentToggles as any)[field] || [];
+
+    let updatedArray: string[];
+    if (isEnabled) {
+      // Add itemId if not already present
+      if (!currentArray.includes(itemId)) {
+        updatedArray = [...currentArray, itemId];
+      } else {
+        updatedArray = currentArray;
+      }
+    } else {
+      // Remove itemId if present
+      updatedArray = currentArray.filter(id => id !== itemId);
+    }
+
+    // Update the health pass
+    await HealthPassModel.findByIdAndUpdate(id, {
+      $set: {
+        [`dataToggles.${field}`]: updatedArray
+      }
+    });
+
+    // Return the updated health pass
+    return this.findById(id);
+  }
+
   private toResponseDto(healthPass: HealthPass): HealthPassResponseDto {
     // This method is no longer used but kept for compatibility
     // Use buildHealthPassResponse instead
