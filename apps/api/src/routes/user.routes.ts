@@ -88,11 +88,136 @@ router.patch(
  * /users/summary:
  *   get:
  *     tags: [Users]
- *     summary: Get user health summary
- *     description: Returns a summary of user health data for HealthPass preview
+ *     summary: Get user full health summary
+ *     description: Returns a complete summary of user profile and all health data including medical conditions, medications, allergies, lifestyles, and documents
  *     responses:
  *       200:
- *         description: User health summary
+ *         description: User full health summary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     firstName:
+ *                       type: string
+ *                     lastName:
+ *                       type: string
+ *                     fullName:
+ *                       type: string
+ *                     governmentId:
+ *                       type: string
+ *                     dateOfBirth:
+ *                       type: string
+ *                       format: date
+ *                     birthPlace:
+ *                       type: string
+ *                     gender:
+ *                       type: string
+ *                       enum: [male, female, other]
+ *                     medicalConditions:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           diagnosedDate:
+ *                             type: string
+ *                             format: date
+ *                           notes:
+ *                             type: string
+ *                           isActive:
+ *                             type: boolean
+ *                     medications:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           medicationName:
+ *                             type: string
+ *                           dosageAmount:
+ *                             type: string
+ *                           frequency:
+ *                             type: string
+ *                           startDate:
+ *                             type: string
+ *                             format: date
+ *                           endDate:
+ *                             type: string
+ *                             format: date
+ *                           notes:
+ *                             type: string
+ *                           isActive:
+ *                             type: boolean
+ *                     allergies:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           allergen:
+ *                             type: string
+ *                           type:
+ *                             type: string
+ *                             enum: [drug, food, environmental, insect, latex, other]
+ *                           severity:
+ *                             type: string
+ *                             enum: [mild, moderate, severe, life_threatening]
+ *                           reaction:
+ *                             type: string
+ *                           notes:
+ *                             type: string
+ *                           isActive:
+ *                             type: boolean
+ *                     lifestyles:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           category:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ *                           frequency:
+ *                             type: string
+ *                           notes:
+ *                             type: string
+ *                           isActive:
+ *                             type: boolean
+ *                     documents:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           documentName:
+ *                             type: string
+ *                           documentType:
+ *                             type: string
+ *                           documentDate:
+ *                             type: string
+ *                             format: date
+ *                           fileUrl:
+ *                             type: string
+ *                           notes:
+ *                             type: string
+ *                           isActive:
+ *                             type: boolean
  */
 router.get('/summary', userController.getSummary.bind(userController));
 

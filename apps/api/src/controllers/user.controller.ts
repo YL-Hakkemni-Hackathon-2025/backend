@@ -23,7 +23,7 @@ export class UserController {
 
   async getSummary(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const summary = await userService.getSummary(req.user!.userId);
+      const summary = await userService.getFullSummary(req.user!.userId);
       res.json({ success: true, data: summary });
     } catch (error) {
       next(error);

@@ -1,11 +1,16 @@
 import { UserModel, User } from '@hakkemni/models';
 import {
-  CreateUserDto,
-  UpdateUserDto,
-  UserResponseDto,
-  UserSummaryDto
+    CreateUserDto,
+    UpdateUserDto, UserFullSummaryDto,
+    UserResponseDto,
+    UserSummaryDto
 } from '@hakkemni/dto';
 import { NotFoundError } from '@hakkemni/common';
+import {medicalConditionService} from "./medical-condition.service";
+import {medicationService} from "./medication.service";
+import {allergyService} from "./allergy.service";
+import {lifestyleService} from "./lifestyle.service";
+import {documentService} from "./document.service";
 
 export class UserService {
   /**
@@ -89,6 +94,41 @@ export class UserService {
       fullName: `${user.firstName} ${user.lastName}`,
       dateOfBirth: user.dateOfBirth,
       gender: user.gender
+    };
+  }
+
+  /**
+   * Get full user summary with all health data
+   */
+  async getFullSummary(id: string): Promise<UserFullSummaryDto> {
+    const user = await UserModel.findById(id);
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Fetch all health data in parallel
+    const [medicalConditions, medications, allergies, lifestyles, documents] = await Promise.all([
+      medicalConditionService.findByUserId(id, true),
+      medicationService.findByUserId(id, true),
+      allergyService.findByUserId(id, true),
+      lifestyleService.findByUserId(id, true),
+      documentService.findByUserId(id, true)
+    ]);
+
+    return {
+      id: user._id.toString(),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName} ${user.lastName}`,
+      governmentId: user.governmentId,
+      dateOfBirth: user.dateOfBirth,
+      birthPlace: user.birthPlace,
+      gender: user.gender,
+      medicalConditions,
+      medications,
+      allergies,
+      lifestyles,
+      documents
     };
   }
 
