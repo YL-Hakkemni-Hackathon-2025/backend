@@ -1,10 +1,18 @@
-import OpenAI from 'openai';
+import { GoogleGenAI } from '@google/genai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize Gemini with new SDK
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
+// Default model for translation (fast and efficient)
+const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
 
 export class TranslationService {
+  private modelName: string;
+
+  constructor() {
+    this.modelName = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+  }
+
   /**
    * Use AI to transliterate Arabic names to English phonetically
    * AI understands context - "ربيع" as a name becomes "Rabih", not "Spring"
@@ -28,21 +36,15 @@ export class TranslationService {
            
            Arabic place: ${arabicText}`;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-5-nano',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert in Arabic to English transliteration, specializing in Lebanese names and places. You provide accurate phonetic conversions.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
+      const response = await ai.models.generateContent({
+        model: this.modelName,
+        contents: prompt,
+        config: {
+          systemInstruction: 'You are an expert in Arabic to English transliteration, specializing in Lebanese names and places. You provide accurate phonetic conversions. Only respond with the transliterated text, nothing else.'
+        }
       });
 
-      const result = response.choices[0]?.message?.content?.trim() || arabicText;
+      const result = response.text?.trim() || arabicText;
       console.log(`  🤖 AI transliteration: "${arabicText}" -> "${result}"`);
       return result;
     } catch (error) {
