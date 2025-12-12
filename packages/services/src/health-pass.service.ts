@@ -5,7 +5,17 @@ import {
   HealthPassResponseDto,
   HealthPassPreviewDto,
   HealthPassSummaryDto,
-  AiHealthPassSuggestionsDto
+  AiHealthPassSuggestionsDto,
+  HealthPassMedicalConditionItemDto,
+  HealthPassMedicationItemDto,
+  HealthPassAllergyItemDto,
+  HealthPassLifestyleItemDto,
+  HealthPassDocumentItemDto,
+  MedicalConditionResponseDto,
+  MedicationResponseDto,
+  AllergyResponseDto,
+  LifestyleResponseDto,
+  DocumentResponseDto
 } from '@hakkemni/dto';
 import {
   NotFoundError,
@@ -50,20 +60,20 @@ export class HealthPassService {
     // Generate QR code
     const qrCode = await qrCodeService.generateQrCode(accessCode);
 
-    // Merge user toggles with AI suggestions
+    // Build data toggles from AI suggestions (for storage)
     const dataToggles = {
       name: true as const,
       gender: true as const,
       dateOfBirth: true as const,
-      medicalConditions: dto.dataToggles?.medicalConditions ?? aiSuggestions.suggestedToggles.medicalConditions,
-      medications: dto.dataToggles?.medications ?? aiSuggestions.suggestedToggles.medications,
-      allergies: dto.dataToggles?.allergies ?? aiSuggestions.suggestedToggles.allergies,
-      lifestyleChoices: dto.dataToggles?.lifestyleChoices ?? aiSuggestions.suggestedToggles.lifestyleChoices,
-      documents: dto.dataToggles?.documents ?? aiSuggestions.suggestedToggles.documents,
-      specificConditions: dto.dataToggles?.specificConditions ?? aiSuggestions.suggestedToggles.specificConditions,
-      specificMedications: dto.dataToggles?.specificMedications ?? aiSuggestions.suggestedToggles.specificMedications,
-      specificAllergies: dto.dataToggles?.specificAllergies ?? aiSuggestions.suggestedToggles.specificAllergies,
-      specificDocuments: dto.dataToggles?.specificDocuments ?? aiSuggestions.suggestedToggles.specificDocuments
+      medicalConditions: true,
+      medications: true,
+      allergies: true,
+      lifestyleChoices: true,
+      documents: true,
+      specificConditions: aiSuggestions.conditionRecommendations.filter(r => r.isRelevant).map(r => r.id),
+      specificMedications: aiSuggestions.medicationRecommendations.filter(r => r.isRelevant).map(r => r.id),
+      specificAllergies: aiSuggestions.allergyRecommendations.filter(r => r.isRelevant).map(r => r.id),
+      specificDocuments: aiSuggestions.documentRecommendations.filter(r => r.isRelevant).map(r => r.id)
     };
 
     const healthPass = await HealthPassModel.create({
@@ -75,13 +85,20 @@ export class HealthPassService {
       accessCode,
       status: HealthPassStatus.GENERATED,
       dataToggles,
-      aiRecommendations: aiSuggestions.recommendations,
-      aiSuggestedToggles: Object.keys(aiSuggestions.suggestedToggles)
-        .filter(k => (aiSuggestions.suggestedToggles as any)[k] === true),
+      aiRecommendations: aiSuggestions.overallRecommendation,
       expiresAt
     });
 
-    return this.toResponseDto(healthPass);
+    // Build populated response with AI recommendations per item
+    return this.buildHealthPassResponse(
+      healthPass,
+      conditions,
+      medications,
+      allergies,
+      lifestyles,
+      documents,
+      aiSuggestions
+    );
   }
 
   /**
@@ -92,7 +109,33 @@ export class HealthPassService {
     if (!healthPass) {
       throw new NotFoundError('Health pass not found');
     }
-    return this.toResponseDto(healthPass);
+
+    const userId = healthPass.userId.toString();
+
+    // Fetch all health data
+    const [conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+      medicalConditionService.findByUserId(userId),
+      medicationService.findByUserId(userId),
+      allergyService.findByUserId(userId),
+      lifestyleService.findByUserId(userId),
+      documentService.findByUserId(userId)
+    ]);
+
+    // Regenerate AI suggestions for the populated response
+    const aiSuggestions = await aiService.generateHealthPassRecommendations(
+      healthPass.appointmentSpecialty as AppointmentSpecialty,
+      { conditions, medications, allergies, lifestyles, documents }
+    );
+
+    return this.buildHealthPassResponse(
+      healthPass,
+      conditions,
+      medications,
+      allergies,
+      lifestyles,
+      documents,
+      aiSuggestions
+    );
   }
 
   /**
@@ -198,7 +241,8 @@ export class HealthPassService {
       throw new NotFoundError('Health pass not found');
     }
 
-    return this.toResponseDto(healthPass);
+    // Return the populated response via findById
+    return this.findById(id);
   }
 
   /**
@@ -242,6 +286,73 @@ export class HealthPassService {
   }
 
   private toResponseDto(healthPass: HealthPass): HealthPassResponseDto {
+    // This method is no longer used but kept for compatibility
+    // Use buildHealthPassResponse instead
+    throw new Error('Use buildHealthPassResponse instead');
+  }
+
+  /**
+   * Build populated health pass response with AI recommendations per item
+   */
+  private buildHealthPassResponse(
+    healthPass: HealthPass,
+    conditions: MedicalConditionResponseDto[],
+    medications: MedicationResponseDto[],
+    allergies: AllergyResponseDto[],
+    lifestyles: LifestyleResponseDto[],
+    documents: DocumentResponseDto[],
+    aiSuggestions: AiHealthPassSuggestionsDto
+  ): HealthPassResponseDto {
+    // Map conditions with AI recommendations
+    const medicalConditionsItems: HealthPassMedicalConditionItemDto[] = conditions.map(c => {
+      const rec = aiSuggestions.conditionRecommendations.find(r => r.id === c.id);
+      return {
+        data: c,
+        isRelevant: rec?.isRelevant ?? true,
+        aiRecommendation: rec?.recommendation ?? 'Recommended to share with your doctor.'
+      };
+    });
+
+    // Map medications with AI recommendations
+    const medicationsItems: HealthPassMedicationItemDto[] = medications.map(m => {
+      const rec = aiSuggestions.medicationRecommendations.find(r => r.id === m.id);
+      return {
+        data: m,
+        isRelevant: rec?.isRelevant ?? true,
+        aiRecommendation: rec?.recommendation ?? 'Recommended to share with your doctor.'
+      };
+    });
+
+    // Map allergies with AI recommendations
+    const allergiesItems: HealthPassAllergyItemDto[] = allergies.map(a => {
+      const rec = aiSuggestions.allergyRecommendations.find(r => r.id === a.id);
+      return {
+        data: a,
+        isRelevant: rec?.isRelevant ?? true,
+        aiRecommendation: rec?.recommendation ?? 'Important for medication safety.'
+      };
+    });
+
+    // Map lifestyles with AI recommendations
+    const lifestylesItems: HealthPassLifestyleItemDto[] = lifestyles.map(l => {
+      const rec = aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id);
+      return {
+        data: l,
+        isRelevant: rec?.isRelevant ?? false,
+        aiRecommendation: rec?.recommendation ?? 'Share if relevant to your appointment.'
+      };
+    });
+
+    // Map documents with AI recommendations
+    const documentsItems: HealthPassDocumentItemDto[] = documents.map(d => {
+      const rec = aiSuggestions.documentRecommendations.find(r => r.id === d.id);
+      return {
+        data: d,
+        isRelevant: rec?.isRelevant ?? false,
+        aiRecommendation: rec?.recommendation ?? 'Share if relevant to your appointment.'
+      };
+    });
+
     return {
       id: healthPass._id.toString(),
       userId: healthPass.userId.toString(),
@@ -251,9 +362,12 @@ export class HealthPassService {
       qrCode: healthPass.qrCode,
       accessCode: healthPass.accessCode,
       status: healthPass.status as HealthPassStatus,
-      dataToggles: healthPass.dataToggles,
-      aiRecommendations: healthPass.aiRecommendations,
-      aiSuggestedToggles: healthPass.aiSuggestedToggles,
+      medicalConditions: medicalConditionsItems,
+      medications: medicationsItems,
+      allergies: allergiesItems,
+      lifestyles: lifestylesItems,
+      documents: documentsItems,
+      aiRecommendations: aiSuggestions.overallRecommendation,
       expiresAt: healthPass.expiresAt,
       lastAccessedAt: healthPass.lastAccessedAt,
       accessCount: healthPass.accessCount,

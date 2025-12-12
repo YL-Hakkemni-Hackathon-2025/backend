@@ -1,11 +1,24 @@
 import { IsString, IsOptional, IsDate, IsBoolean, IsEnum, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { AppointmentSpecialty, HealthPassStatus, HealthPassDataToggles } from '@hakkemni/common';
-import { MedicalConditionSummaryDto } from './medical-condition.dto';
-import { MedicationSummaryDto } from './medication.dto';
-import { AllergySummaryDto } from './allergy.dto';
-import { LifestyleSummaryDto } from './lifestyle.dto';
-import { DocumentSummaryDto } from './document.dto';
+import { MedicalConditionResponseDto, MedicalConditionSummaryDto } from './medical-condition.dto';
+import { MedicationResponseDto, MedicationSummaryDto } from './medication.dto';
+import { AllergyResponseDto, AllergySummaryDto } from './allergy.dto';
+import { LifestyleResponseDto, LifestyleSummaryDto } from './lifestyle.dto';
+import { DocumentResponseDto, DocumentSummaryDto } from './document.dto';
+
+// Health pass item with toggle and AI recommendation
+export class HealthPassItemDto<T> {
+  data!: T;
+  isRelevant!: boolean;
+  aiRecommendation!: string;
+}
+
+export class HealthPassMedicalConditionItemDto extends HealthPassItemDto<MedicalConditionResponseDto> {}
+export class HealthPassMedicationItemDto extends HealthPassItemDto<MedicationResponseDto> {}
+export class HealthPassAllergyItemDto extends HealthPassItemDto<AllergyResponseDto> {}
+export class HealthPassLifestyleItemDto extends HealthPassItemDto<LifestyleResponseDto> {}
+export class HealthPassDocumentItemDto extends HealthPassItemDto<DocumentResponseDto> {}
 
 // Request DTOs
 export class DataTogglesDto implements Partial<HealthPassDataToggles> {
@@ -103,9 +116,17 @@ export class HealthPassResponseDto {
   qrCode!: string;
   accessCode!: string;
   status!: HealthPassStatus;
-  dataToggles!: HealthPassDataToggles;
+
+  // Populated health data with toggles and AI recommendations
+  medicalConditions!: HealthPassMedicalConditionItemDto[];
+  medications!: HealthPassMedicationItemDto[];
+  allergies!: HealthPassAllergyItemDto[];
+  lifestyles!: HealthPassLifestyleItemDto[];
+  documents!: HealthPassDocumentItemDto[];
+
+  // Overall AI recommendation
   aiRecommendations?: string;
-  aiSuggestedToggles?: string[];
+
   expiresAt!: Date;
   lastAccessedAt?: Date;
   accessCount!: number;
@@ -144,20 +165,23 @@ export class HealthPassSummaryDto {
   createdAt!: Date;
 }
 
+// AI-generated item recommendation
+export class AiItemRecommendationDto {
+  id!: string;
+  isRelevant!: boolean;
+  recommendation!: string;
+}
+
 export class AiHealthPassSuggestionsDto {
-  suggestedToggles!: {
-    medicalConditions: boolean;
-    medications: boolean;
-    allergies: boolean;
-    lifestyleChoices: boolean;
-    documents: boolean;
-    specificConditions: string[];
-    specificMedications: string[];
-    specificAllergies: string[];
-    specificDocuments: string[];
-  };
-  recommendations!: string;
-  reasoning!: string;
+  // Individual item recommendations with IDs and explanations
+  conditionRecommendations!: AiItemRecommendationDto[];
+  medicationRecommendations!: AiItemRecommendationDto[];
+  allergyRecommendations!: AiItemRecommendationDto[];
+  lifestyleRecommendations!: AiItemRecommendationDto[];
+  documentRecommendations!: AiItemRecommendationDto[];
+
+  // Overall recommendation message
+  overallRecommendation!: string;
 }
 
 export class QrCodeDataDto {

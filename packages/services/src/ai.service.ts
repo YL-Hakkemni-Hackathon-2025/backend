@@ -11,7 +11,8 @@ import {
     AllergyResponseDto,
     LifestyleResponseDto,
     DocumentResponseDto,
-    AiHealthPassSuggestionsDto
+    AiHealthPassSuggestionsDto,
+    AiItemRecommendationDto
 } from '@hakkemni/dto';
 
 // Initialize Gemini with new SDK
@@ -131,50 +132,51 @@ Respond in JSON format:
         try {
             const prompt = `You are a medical AI assistant helping a patient prepare for a ${appointmentSpecialty} appointment.
 
-The patient has the following medical information (each item includes its ID which you MUST use in your response):
+The patient has the following medical information. For EACH item, you must determine if it's relevant to share for this specific appointment type and provide a brief recommendation explaining why or why not.
 
 Medical Conditions:
-${userData.conditions.map(c => `- [ID: ${c.id}] ${c.name} (diagnosed: ${c.diagnosedDate || 'unknown'})`).join('\n') || 'None'}
+${userData.conditions.map(c => `- ID: "${c.id}" | Name: ${c.name} | Diagnosed: ${c.diagnosedDate || 'unknown'} | Notes: ${c.notes || 'none'}`).join('\n') || 'None'}
 
 Medications:
-${userData.medications.map(m => `- [ID: ${m.id}] ${m.medicationName} ${m.dosageAmount} (${m.frequency})`).join('\n') || 'None'}
+${userData.medications.map(m => `- ID: "${m.id}" | Name: ${m.medicationName} | Dosage: ${m.dosageAmount} | Frequency: ${m.frequency} | Notes: ${m.notes || 'none'}`).join('\n') || 'None'}
 
 Allergies:
-${userData.allergies.map(a => `- [ID: ${a.id}] ${a.allergen} (${a.type}, severity: ${a.severity || 'unknown'})`).join('\n') || 'None'}
+${userData.allergies.map(a => `- ID: "${a.id}" | Allergen: ${a.allergen} | Type: ${a.type} | Severity: ${a.severity || 'unknown'} | Reaction: ${a.reaction || 'unknown'}`).join('\n') || 'None'}
 
 Lifestyle:
-${userData.lifestyles.map(l => `- [ID: ${l.id}] ${l.category}: ${l.description}`).join('\n') || 'None'}
+${userData.lifestyles.map(l => `- ID: "${l.id}" | Category: ${l.category} | Description: ${l.description} | Frequency: ${l.frequency || 'unknown'}`).join('\n') || 'None'}
 
 Documents:
-${userData.documents.map(d => `- [ID: ${d.id}] ${d.documentName} (${d.documentType})${d.notes ? ` - Notes: ${d.notes}` : ''}`).join('\n') || 'None'}
+${userData.documents.map(d => `- ID: "${d.id}" | Name: ${d.documentName} | Type: ${d.documentType} | Date: ${d.documentDate || 'unknown'} | Notes: ${d.notes || 'none'}`).join('\n') || 'None'}
 
-Based on this ${appointmentSpecialty} appointment, determine:
-1. Which SPECIFIC items should be shared — return the EXACT IDs from the lists above (e.g., ["6789abc...", "1234def..."]) in the corresponding arrays below.
-2. A brief recommendation message for the patient
-3. A short reasoning field explaining the choice
-
-Important output rules (PLEASE FOLLOW EXACTLY):
-- The response MUST be valid JSON and NOTHING else.
-- You MUST use the exact IDs provided in brackets [ID: ...] above. Do NOT invent IDs or use item names as IDs.
-- Do NOT set all category booleans to true. Only set a category boolean to true if you also provide one or more specific IDs for that category.
-- The JSON MUST have the structure below. If a category has no suggested specific IDs, set its specific array to [] and the category boolean to false.
+For this ${appointmentSpecialty} appointment, analyze EACH item and provide:
+1. Whether it's relevant (true/false)
+2. A brief recommendation explaining why this item should or should not be shared
 
 Respond in JSON format exactly like this:
 {
-  "suggestedToggles": {
-    "medicalConditions": boolean,
-    "medications": boolean,
-    "allergies": boolean,
-    "lifestyleChoices": boolean,
-    "documents": boolean,
-    "specificConditions": ["exact-id-from-above"],
-    "specificMedications": ["exact-id-from-above"],
-    "specificAllergies": ["exact-id-from-above"],
-    "specificDocuments": ["exact-id-from-above"]
-  },
-  "recommendations": "Brief message about what to share and why",
-  "reasoning": "Detailed explanation of why these items are relevant"
-}`;
+  "conditionRecommendations": [
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this condition is/isn't relevant" }
+  ],
+  "medicationRecommendations": [
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this medication is/isn't relevant" }
+  ],
+  "allergyRecommendations": [
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this allergy is/isn't relevant" }
+  ],
+  "lifestyleRecommendations": [
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this lifestyle choice is/isn't relevant" }
+  ],
+  "documentRecommendations": [
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this document is/isn't relevant" }
+  ],
+  "overallRecommendation": "A brief overall summary of what to share and why for this appointment"
+}
+
+IMPORTANT:
+- You MUST include ALL items from each category in your response, even if not relevant
+- Use the EXACT IDs provided above
+- Keep recommendations concise (1-2 sentences)`;
 
             const response = await ai.models.generateContent({
                 model: this.modelName,
@@ -194,58 +196,81 @@ Respond in JSON format exactly like this:
 
             const parsed = JSON.parse(rawContent);
 
-            // Normalize and prefer specific IDs as the source of truth for toggles
-            const parsedToggles = parsed.suggestedToggles || {};
-            const parsedSpecificConditions: string[] = Array.isArray(parsedToggles.specificConditions) ? parsedToggles.specificConditions : [];
-            const parsedSpecificMedications: string[] = Array.isArray(parsedToggles.specificMedications) ? parsedToggles.specificMedications : [];
-            const parsedSpecificAllergies: string[] = Array.isArray(parsedToggles.specificAllergies) ? parsedToggles.specificAllergies : [];
-            const parsedSpecificDocuments: string[] = Array.isArray(parsedToggles.specificDocuments) ? parsedToggles.specificDocuments : [];
+            // Helper to create default recommendation for missing items
+            const createDefaultRecommendation = (id: string): AiItemRecommendationDto => ({
+                id,
+                isRelevant: true,
+                recommendation: 'Recommended to share with your doctor.'
+            });
 
-            // Booleans: derive from specifics
-            const medicalConditionsToggle = parsedSpecificConditions.length > 0;
-            const medicationsToggle = parsedSpecificMedications.length > 0;
-            const allergiesToggle = parsedSpecificAllergies.length > 0;
-            const documentsToggle = parsedSpecificDocuments.length > 0;
-            const lifestyleChoicesToggle = !!parsedToggles.lifestyleChoices;
+            // Map and validate condition recommendations
+            const conditionRecommendations: AiItemRecommendationDto[] = userData.conditions.map(c => {
+                const found = parsed.conditionRecommendations?.find((r: any) => r.id === c.id);
+                return found ? { id: c.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(c.id);
+            });
 
-            // Filter specific IDs to only include valid ones
-            const validConditionIds = userData.conditions.map(c => c.id);
-            const validMedicationIds = userData.medications.map(m => m.id);
-            const validAllergyIds = userData.allergies.map(a => a.id);
-            const validDocumentIds = userData.documents.map(d => d.id);
+            // Map and validate medication recommendations
+            const medicationRecommendations: AiItemRecommendationDto[] = userData.medications.map(m => {
+                const found = parsed.medicationRecommendations?.find((r: any) => r.id === m.id);
+                return found ? { id: m.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(m.id);
+            });
+
+            // Map and validate allergy recommendations
+            const allergyRecommendations: AiItemRecommendationDto[] = userData.allergies.map(a => {
+                const found = parsed.allergyRecommendations?.find((r: any) => r.id === a.id);
+                return found ? { id: a.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(a.id);
+            });
+
+            // Map and validate lifestyle recommendations
+            const lifestyleRecommendations: AiItemRecommendationDto[] = userData.lifestyles.map(l => {
+                const found = parsed.lifestyleRecommendations?.find((r: any) => r.id === l.id);
+                return found ? { id: l.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(l.id);
+            });
+
+            // Map and validate document recommendations
+            const documentRecommendations: AiItemRecommendationDto[] = userData.documents.map(d => {
+                const found = parsed.documentRecommendations?.find((r: any) => r.id === d.id);
+                return found ? { id: d.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(d.id);
+            });
 
             return {
-                suggestedToggles: {
-                    medicalConditions: medicalConditionsToggle,
-                    medications: medicationsToggle,
-                    allergies: allergiesToggle,
-                    lifestyleChoices: lifestyleChoicesToggle,
-                    documents: documentsToggle,
-                    specificConditions: parsedSpecificConditions.filter((id: string) => validConditionIds.includes(id)),
-                    specificMedications: parsedSpecificMedications.filter((id: string) => validMedicationIds.includes(id)),
-                    specificAllergies: parsedSpecificAllergies.filter((id: string) => validAllergyIds.includes(id)),
-                    specificDocuments: parsedSpecificDocuments.filter((id: string) => validDocumentIds.includes(id))
-                },
-                recommendations: parsed.recommendations || 'Share relevant medical information with your doctor.',
-                reasoning: parsed.reasoning || ''
+                conditionRecommendations,
+                medicationRecommendations,
+                allergyRecommendations,
+                lifestyleRecommendations,
+                documentRecommendations,
+                overallRecommendation: parsed.overallRecommendation || 'Share relevant medical information with your doctor.'
             };
         } catch (error) {
             console.error('AI health pass recommendations error:', error);
             // Return default recommendations if AI fails
             return {
-                suggestedToggles: {
-                    medicalConditions: true,
-                    medications: true,
-                    allergies: true,
-                    lifestyleChoices: false,
-                    documents: false,
-                    specificConditions: [],
-                    specificMedications: [],
-                    specificAllergies: [],
-                    specificDocuments: []
-                },
-                recommendations: 'We recommend sharing your medical conditions, medications, and allergies with your doctor for a comprehensive consultation.',
-                reasoning: 'Default recommendation - AI processing unavailable'
+                conditionRecommendations: userData.conditions.map(c => ({
+                    id: c.id,
+                    isRelevant: true,
+                    recommendation: 'Recommended to share with your doctor.'
+                })),
+                medicationRecommendations: userData.medications.map(m => ({
+                    id: m.id,
+                    isRelevant: true,
+                    recommendation: 'Recommended to share with your doctor.'
+                })),
+                allergyRecommendations: userData.allergies.map(a => ({
+                    id: a.id,
+                    isRelevant: true,
+                    recommendation: 'Important for medication safety.'
+                })),
+                lifestyleRecommendations: userData.lifestyles.map(l => ({
+                    id: l.id,
+                    isRelevant: false,
+                    recommendation: 'Share if relevant to your appointment.'
+                })),
+                documentRecommendations: userData.documents.map(d => ({
+                    id: d.id,
+                    isRelevant: false,
+                    recommendation: 'Share if relevant to your appointment.'
+                })),
+                overallRecommendation: 'We recommend sharing your medical conditions, medications, and allergies with your doctor for a comprehensive consultation.'
             };
         }
     }
