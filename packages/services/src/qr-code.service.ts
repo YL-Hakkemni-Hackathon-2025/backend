@@ -4,14 +4,14 @@ export class QrCodeService {
   private readonly baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.APP_BASE_URL || 'https://hakkemni.health';
+    this.baseUrl = process.env.APP_BASE_URL || 'https://hakkemni.internalizable.dev';
   }
 
   /**
    * Generate QR code for health pass access
    */
   async generateQrCode(accessCode: string): Promise<string> {
-    const accessUrl = `${this.baseUrl}/healthpass/${accessCode}`;
+    const accessUrl = `${this.baseUrl}/health-summary?code=${accessCode}`;
 
     try {
       // Generate QR code as base64 data URL
@@ -37,7 +37,7 @@ export class QrCodeService {
    * Generate QR code as buffer (for file saving)
    */
   async generateQrCodeBuffer(accessCode: string): Promise<Buffer> {
-    const accessUrl = `${this.baseUrl}/healthpass/${accessCode}`;
+    const accessUrl = `${this.baseUrl}/health-summary?code=${accessCode}`;
 
     try {
       return await QRCode.toBuffer(accessUrl, {
