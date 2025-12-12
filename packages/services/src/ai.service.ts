@@ -151,24 +151,24 @@ ${userData.documents.map(d => `- ID: "${d.id}" | Name: ${d.documentName} | Type:
 
 For this ${appointmentSpecialty} appointment, analyze EACH item and provide:
 1. Whether it's relevant (true/false)
-2. A brief recommendation explaining why this item should or should not be shared
+2. A single-line recommendation (max 10-15 words) explaining why
 
 Respond in JSON format exactly like this:
 {
   "conditionRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this condition is/isn't relevant" }
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "medicationRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this medication is/isn't relevant" }
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "allergyRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this allergy is/isn't relevant" }
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "lifestyleRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this lifestyle choice is/isn't relevant" }
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "documentRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Brief explanation why this document is/isn't relevant" }
+    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "overallRecommendation": "A brief overall summary of what to share and why for this appointment"
 }
@@ -176,7 +176,7 @@ Respond in JSON format exactly like this:
 IMPORTANT:
 - You MUST include ALL items from each category in your response, even if not relevant
 - Use the EXACT IDs provided above
-- Keep recommendations concise (1-2 sentences)`;
+- Keep recommendations to ONE LINE only (max 10-15 words)`;
 
             const response = await ai.models.generateContent({
                 model: this.modelName,
