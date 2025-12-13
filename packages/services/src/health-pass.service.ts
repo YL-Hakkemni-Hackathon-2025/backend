@@ -113,6 +113,13 @@ export class HealthPassService {
       dataToggles,
       aiRecommendations: aiSuggestions.overallRecommendation,
       aiProfileSummary,
+      aiItemRecommendations: {
+        conditionRecommendations: aiSuggestions.conditionRecommendations,
+        medicationRecommendations: aiSuggestions.medicationRecommendations,
+        allergyRecommendations: aiSuggestions.allergyRecommendations,
+        lifestyleRecommendations: aiSuggestions.lifestyleRecommendations,
+        documentRecommendations: aiSuggestions.documentRecommendations
+      },
       expiresAt
     });
 
@@ -148,11 +155,15 @@ export class HealthPassService {
       documentService.findByUserId(userId)
     ]);
 
-    // Regenerate AI suggestions for the populated response
-    const aiSuggestions = await aiService.generateHealthPassRecommendations(
-      healthPass.appointmentSpecialty as AppointmentSpecialty,
-      { conditions, medications, allergies, lifestyles, documents }
-    );
+    // Use stored AI suggestions from database
+    const aiSuggestions: AiHealthPassSuggestionsDto = {
+      conditionRecommendations: healthPass.aiItemRecommendations?.conditionRecommendations || [],
+      medicationRecommendations: healthPass.aiItemRecommendations?.medicationRecommendations || [],
+      allergyRecommendations: healthPass.aiItemRecommendations?.allergyRecommendations || [],
+      lifestyleRecommendations: healthPass.aiItemRecommendations?.lifestyleRecommendations || [],
+      documentRecommendations: healthPass.aiItemRecommendations?.documentRecommendations || [],
+      overallRecommendation: healthPass.aiRecommendations || ''
+    };
 
     return this.buildHealthPassResponse(
       healthPass,
@@ -208,11 +219,8 @@ export class HealthPassService {
       documentService.findByUserId(userId)
     ]);
 
-    // Regenerate AI suggestions to get recommendations
-    const aiSuggestions = await aiService.generateHealthPassRecommendations(
-      healthPass.appointmentSpecialty as AppointmentSpecialty,
-      { conditions, medications, allergies, lifestyles, documents }
-    );
+    // Use stored AI suggestions from database
+    const storedRecommendations = healthPass.aiItemRecommendations;
 
     const preview: HealthPassPreviewDto = {
       patientName: user.fullName,
@@ -229,7 +237,7 @@ export class HealthPassService {
     if (toggles.medicalConditions && toggles.specificConditions) {
       const filteredConditions = conditions.filter(c => toggles.specificConditions!.includes(c.id));
       preview.medicalConditions = filteredConditions.map(c => {
-        const rec = aiSuggestions.conditionRecommendations.find(r => r.id === c.id);
+        const rec = storedRecommendations?.conditionRecommendations?.find(r => r.id === c.id);
         return {
           id: c.id,
           name: c.name,
@@ -244,7 +252,7 @@ export class HealthPassService {
     if (toggles.medications && toggles.specificMedications) {
       const filteredMedications = medications.filter(m => toggles.specificMedications!.includes(m.id));
       preview.medications = filteredMedications.map(m => {
-        const rec = aiSuggestions.medicationRecommendations.find(r => r.id === m.id);
+        const rec = storedRecommendations?.medicationRecommendations?.find(r => r.id === m.id);
         return {
           id: m.id,
           medicationName: m.medicationName,
@@ -260,7 +268,7 @@ export class HealthPassService {
     if (toggles.allergies && toggles.specificAllergies) {
       const filteredAllergies = allergies.filter(a => toggles.specificAllergies!.includes(a.id));
       preview.allergies = filteredAllergies.map(a => {
-        const rec = aiSuggestions.allergyRecommendations.find(r => r.id === a.id);
+        const rec = storedRecommendations?.allergyRecommendations?.find(r => r.id === a.id);
         return {
           id: a.id,
           allergen: a.allergen,
@@ -276,7 +284,7 @@ export class HealthPassService {
     if (toggles.lifestyleChoices && toggles.specificLifestyles) {
       const filteredLifestyles = lifestyles.filter(l => toggles.specificLifestyles!.includes(l.id));
       preview.lifestyleChoices = filteredLifestyles.map(l => {
-        const rec = aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id);
+        const rec = storedRecommendations?.lifestyleRecommendations?.find(r => r.id === l.id);
         return {
           id: l.id,
           category: l.category,
@@ -291,7 +299,7 @@ export class HealthPassService {
     if (toggles.documents && toggles.specificDocuments) {
       const filteredDocuments = documents.filter(d => toggles.specificDocuments!.includes(d.id));
       preview.documents = filteredDocuments.map(d => {
-        const rec = aiSuggestions.documentRecommendations.find(r => r.id === d.id);
+        const rec = storedRecommendations?.documentRecommendations?.find(r => r.id === d.id);
         return {
           id: d.id,
           documentName: d.documentName,

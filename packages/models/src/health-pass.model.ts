@@ -90,6 +90,16 @@ export class HealthPass {
   @prop()
   public aiProfileSummary?: string;
 
+  // Store all per-item AI recommendations as JSON
+  @prop({ type: () => Object })
+  public aiItemRecommendations?: {
+    conditionRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+    medicationRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+    allergyRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+    lifestyleRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+    documentRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+  };
+
   @prop({ type: () => [String] })
   public aiSuggestedToggles?: string[];
 
