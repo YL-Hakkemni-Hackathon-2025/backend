@@ -127,6 +127,9 @@ export class HealthPassResponseDto {
   // Overall AI recommendation
   aiRecommendations?: string;
 
+  // AI-generated profile summary based on toggled items, age, and patient info
+  aiProfileSummary?: string;
+
   expiresAt!: Date;
   lastAccessedAt?: Date;
   accessCount!: number;

@@ -39,7 +39,8 @@ export class HealthPassService {
    */
   async create(userId: string, dto: CreateHealthPassDto): Promise<HealthPassResponseDto> {
     // Gather all user health data for AI analysis
-    const [conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+    const [user, conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+      userService.findById(userId),
       medicalConditionService.findByUserId(userId),
       medicationService.findByUserId(userId),
       allergyService.findByUserId(userId),
@@ -76,6 +77,32 @@ export class HealthPassService {
       specificDocuments: aiSuggestions.documentRecommendations.filter(r => r.isRelevant).map(r => r.id)
     };
 
+    // Filter toggled items for profile summary
+    const toggledConditions = conditions.filter(c => dataToggles.specificConditions.includes(c.id));
+    const toggledMedications = medications.filter(m => dataToggles.specificMedications.includes(m.id));
+    const toggledAllergies = allergies.filter(a => dataToggles.specificAllergies.includes(a.id));
+    const toggledLifestyles = lifestyles.filter(l =>
+      aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id && r.isRelevant)
+    );
+    const toggledDocuments = documents.filter(d => dataToggles.specificDocuments.includes(d.id));
+
+    // Generate AI profile summary based on toggled items
+    const aiProfileSummary = await aiService.generateProfileSummary(
+      dto.appointmentSpecialty,
+      {
+        fullName: user.fullName,
+        dateOfBirth: user.dateOfBirth,
+        gender: user.gender
+      },
+      {
+        conditions: toggledConditions,
+        medications: toggledMedications,
+        allergies: toggledAllergies,
+        lifestyles: toggledLifestyles,
+        documents: toggledDocuments
+      }
+    );
+
     const healthPass = await HealthPassModel.create({
       userId,
       appointmentSpecialty: dto.appointmentSpecialty,
@@ -86,6 +113,7 @@ export class HealthPassService {
       status: HealthPassStatus.GENERATED,
       dataToggles,
       aiRecommendations: aiSuggestions.overallRecommendation,
+      aiProfileSummary,
       expiresAt
     });
 
@@ -427,6 +455,7 @@ export class HealthPassService {
       lifestyles: lifestylesItems,
       documents: documentsItems,
       aiRecommendations: aiSuggestions.overallRecommendation,
+      aiProfileSummary: healthPass.aiProfileSummary,
       expiresAt: healthPass.expiresAt,
       lastAccessedAt: healthPass.lastAccessedAt,
       accessCount: healthPass.accessCount,

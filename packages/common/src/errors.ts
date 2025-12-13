@@ -58,3 +58,9 @@ export class DocumentProcessingError extends AppError {
   }
 }
 
+export class NonHealthcareDocumentError extends AppError {
+  constructor(message: string = 'This document does not appear to be healthcare-related') {
+    super(message, 400);
+  }
+}
+

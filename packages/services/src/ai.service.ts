@@ -3,7 +3,8 @@ import {
     DocumentType,
     AppointmentSpecialty,
     AIProcessedDocument,
-    AIProcessingError
+    AIProcessingError,
+    NonHealthcareDocumentError
 } from '@hakkemni/common';
 import {
     MedicalConditionResponseDto,
@@ -46,33 +47,42 @@ export class AiService {
      */
     async processDocument(fileContent: Buffer, mimeType: string): Promise<AIProcessedDocument> {
         try {
-            const systemPrompt = `You are a medical document analyzer and clinical assistant. Analyze the provided medical document and extract information.
+            const systemPrompt = `You are a medical document analyzer and clinical assistant. Analyze the provided document and determine if it is healthcare-related.
 
-Your task:
+**FIRST - Determine if this is a healthcare document:**
+- Healthcare documents include: lab reports, medical records, prescriptions, imaging scans (MRI, CT, X-ray), vaccination records, medical reports, discharge summaries, clinical notes, diagnostic reports, etc.
+- NON-healthcare documents include: invoices, receipts, legal documents, personal photos, random images, business documents, ID cards (unless medical ID), resumes, etc.
+- If the document is NOT healthcare-related, set isHealthcareRelated to false and provide a rejectionReason.
+
+**If healthcare-related, extract:**
 1. Identify a suitable document name (e.g., "Blood Test Results - Complete Blood Count", "MRI Brain Scan", etc.)
 2. Find the date of the document if visible
 3. **IMPORTANT - Generate intelligent clinical notes**: 
-   - Do NOT just copy/paste all the values
-   - Identify and highlight ONLY abnormal values, concerning findings, or clinically significant results
-   - Compare values against normal reference ranges
-   - Flag values that are high, low, or borderline
-   - Summarize what these findings might indicate
+   - For MEDICAL REPORTS: Focus on the CONCLUSION, DIAGNOSIS, or IMPRESSION section. This is the most important part.
+   - For LAB REPORTS: Identify and highlight ONLY abnormal values, concerning findings, or clinically significant results. Compare values against normal reference ranges.
+   - For IMAGING (MRI, CT, X-ray): Focus on the radiologist's findings and conclusion.
+   - Do NOT just copy/paste all the values - summarize key clinical findings
    - If all values are normal, state "All values within normal limits"
    - Use clear, concise medical language
 4. Determine the document type
 5. Extract all visible text (for searchability)
 
-Example of GOOD notes for a blood test:
-"Key findings: Elevated glucose (126 mg/dL - prediabetic range), Low hemoglobin (10.2 g/dL - mild anemia), Elevated CRP (15 mg/L - indicates inflammation). All other CBC and coagulation values within normal limits."
+Example of GOOD notes for a medical report:
+"Diagnosis: Type 2 Diabetes Mellitus with mild nephropathy. Recommended follow-up in 3 months."
 
-Example of BAD notes (don't do this):
-"Hemoglobin: 15.8 g/dL, Hematocrit: 47.4%, WBC: 7.51..."
+Example of GOOD notes for a lab test:
+"Key findings: Elevated glucose (126 mg/dL - prediabetic range), Low hemoglobin (10.2 g/dL - mild anemia). All other values within normal limits."
+
+Example of GOOD notes for imaging:
+"Impression: No acute intracranial abnormality. Small benign cyst noted in left frontal lobe, stable."
 
 Respond in JSON format:
 {
-  "suggestedName": "string - descriptive name for the document",
+  "isHealthcareRelated": true/false,
+  "rejectionReason": "string - only if isHealthcareRelated is false, explain why this is not a medical document",
+  "suggestedName": "string - descriptive name for the document (only if healthcare-related)",
   "documentDate": "YYYY-MM-DD or null if not visible",
-  "notes": "string - CLINICAL SUMMARY highlighting only abnormal/significant findings, not raw data dump",
+  "notes": "string - CLINICAL SUMMARY focusing on diagnosis/conclusion for medical reports, or key abnormal findings for lab reports",
   "documentType": "lab_report | mri_scan | ct_scan | x_ray | prescription | medical_report | vaccination_record | other",
   "extractedText": "string - all visible text from document for search purposes",
   "confidence": "number between 0 and 1"
@@ -93,24 +103,44 @@ Respond in JSON format:
 
             const parsed = JSON.parse(contentString);
 
+            // Check if document is healthcare-related
+            if (parsed.isHealthcareRelated === false) {
+                throw new NonHealthcareDocumentError(
+                    parsed.rejectionReason || 'This document does not appear to be healthcare-related. Please upload a medical document such as lab reports, prescriptions, imaging scans, or medical records.'
+                );
+            }
+
             return {
                 suggestedName: parsed.suggestedName || 'Medical Document',
                 suggestedDate: parsed.documentDate ? new Date(parsed.documentDate) : null,
                 suggestedNotes: parsed.notes || '',
                 documentType: this.mapDocumentType(parsed.documentType),
                 extractedText: parsed.extractedText || '',
-                confidence: parsed.confidence || 0.5
+                confidence: parsed.confidence || 0.5,
+                isHealthcareRelated: true
             };
         } catch (error) {
             console.error('AI document processing error:', error);
-            // Return default values if AI processing fails
+
+            // Re-throw NonHealthcareDocumentError so it propagates properly
+            if (error instanceof NonHealthcareDocumentError) {
+                throw error;
+            }
+
+            // Re-throw AIProcessingError for unsupported file types
+            if (error instanceof AIProcessingError) {
+                throw error;
+            }
+
+            // Return default values if AI processing fails for other reasons
             return {
                 suggestedName: 'Medical Document',
                 suggestedDate: null,
                 suggestedNotes: 'Unable to automatically process document. Please review manually.',
                 documentType: DocumentType.OTHER,
                 extractedText: '',
-                confidence: 0
+                confidence: 0,
+                isHealthcareRelated: true
             };
         }
     }
@@ -273,6 +303,123 @@ IMPORTANT:
                 overallRecommendation: 'We recommend sharing your medical conditions, medications, and allergies with your doctor for a comprehensive consultation.'
             };
         }
+    }
+
+    /**
+     * Generate an AI profile summary for the health pass
+     * Takes into account toggled items, patient demographics, and appointment type
+     */
+    async generateProfileSummary(
+        appointmentSpecialty: AppointmentSpecialty,
+        patientInfo: {
+            fullName: string;
+            dateOfBirth: Date;
+            gender?: string;
+        },
+        toggledData: {
+            conditions: MedicalConditionResponseDto[];
+            medications: MedicationResponseDto[];
+            allergies: AllergyResponseDto[];
+            lifestyles: LifestyleResponseDto[];
+            documents: DocumentResponseDto[];
+        }
+    ): Promise<string> {
+        try {
+            // Calculate age
+            const today = new Date();
+            const birthDate = new Date(patientInfo.dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+
+            const prompt = `You are a medical AI assistant. Generate a brief, professional patient profile summary for a ${appointmentSpecialty} appointment.
+
+Patient Information:
+- Name: ${patientInfo.fullName}
+- Age: ${age} years old
+- Gender: ${patientInfo.gender || 'Not specified'}
+- Date of Birth: ${patientInfo.dateOfBirth.toISOString().split('T')[0]}
+
+Selected Medical Information to Share:
+
+Medical Conditions:
+${toggledData.conditions.length > 0 ? toggledData.conditions.map(c => `- ${c.name}${c.notes ? ` (${c.notes})` : ''}`).join('\n') : 'None selected'}
+
+Current Medications:
+${toggledData.medications.length > 0 ? toggledData.medications.map(m => `- ${m.medicationName} ${m.dosageAmount} ${m.frequency}`).join('\n') : 'None selected'}
+
+Known Allergies:
+${toggledData.allergies.length > 0 ? toggledData.allergies.map(a => `- ${a.allergen} (${a.severity || 'severity unknown'}): ${a.reaction || 'reaction unknown'}`).join('\n') : 'None selected'}
+
+Lifestyle Factors:
+${toggledData.lifestyles.length > 0 ? toggledData.lifestyles.map(l => `- ${l.category}: ${l.description}`).join('\n') : 'None selected'}
+
+Medical Documents:
+${toggledData.documents.length > 0 ? toggledData.documents.map(d => `- ${d.documentName} (${d.documentType})${d.notes ? `: ${d.notes}` : ''}`).join('\n') : 'None selected'}
+
+Generate a concise 2-3 sentence professional summary that a doctor can quickly read to understand the patient's health profile before the appointment. Focus on clinically relevant information for the ${appointmentSpecialty} specialty. Be factual and do not make assumptions beyond the provided data.
+
+Respond with ONLY the summary text, no JSON, no formatting, no quotes.`;
+
+            const response = await ai.models.generateContent({
+                model: this.modelName,
+                contents: prompt
+            });
+
+            const summary = response.text?.trim();
+
+            if (!summary) {
+                return this.generateDefaultProfileSummary(age, patientInfo.gender, toggledData);
+            }
+
+            return summary;
+        } catch (error) {
+            console.error('AI profile summary generation error:', error);
+            // Return a basic default summary
+            const today = new Date();
+            const birthDate = new Date(patientInfo.dateOfBirth);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return this.generateDefaultProfileSummary(age, patientInfo.gender, toggledData);
+        }
+    }
+
+    /**
+     * Generate a default profile summary when AI is unavailable
+     */
+    private generateDefaultProfileSummary(
+        age: number,
+        gender: string | undefined,
+        toggledData: {
+            conditions: MedicalConditionResponseDto[];
+            medications: MedicationResponseDto[];
+            allergies: AllergyResponseDto[];
+            lifestyles: LifestyleResponseDto[];
+            documents: DocumentResponseDto[];
+        }
+    ): string {
+        const parts: string[] = [];
+
+        parts.push(`${age}-year-old ${gender || 'patient'}`);
+
+        if (toggledData.conditions.length > 0) {
+            parts.push(`with ${toggledData.conditions.map(c => c.name).join(', ')}`);
+        }
+
+        if (toggledData.medications.length > 0) {
+            parts.push(`currently taking ${toggledData.medications.length} medication(s)`);
+        }
+
+        if (toggledData.allergies.length > 0) {
+            parts.push(`with known allergies to ${toggledData.allergies.map(a => a.allergen).join(', ')}`);
+        }
+
+        return parts.join(' ') + '.';
     }
 
     /**

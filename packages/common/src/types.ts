@@ -94,6 +94,8 @@ export interface AIProcessedDocument {
   documentType: DocumentType;
   extractedText: string;
   confidence: number;
+  isHealthcareRelated: boolean;
+  rejectionReason?: string;
 }
 
 export interface LebanesIdData {

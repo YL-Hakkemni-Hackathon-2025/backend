@@ -84,6 +84,9 @@ export class HealthPass {
   @prop()
   public aiRecommendations?: string;
 
+  @prop()
+  public aiProfileSummary?: string;
+
   @prop({ type: () => [String] })
   public aiSuggestedToggles?: string[];
 
