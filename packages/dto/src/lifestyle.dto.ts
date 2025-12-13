@@ -69,5 +69,7 @@ export class LifestyleSummaryDto {
   id!: string;
   category!: LifestyleCategory;
   description!: string;
+  frequency?: string;
+  aiRecommendation?: string;
 }
 

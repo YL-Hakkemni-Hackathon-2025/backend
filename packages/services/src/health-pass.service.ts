@@ -74,6 +74,7 @@ export class HealthPassService {
       specificConditions: aiSuggestions.conditionRecommendations.filter(r => r.isRelevant).map(r => r.id),
       specificMedications: aiSuggestions.medicationRecommendations.filter(r => r.isRelevant).map(r => r.id),
       specificAllergies: aiSuggestions.allergyRecommendations.filter(r => r.isRelevant).map(r => r.id),
+      specificLifestyles: aiSuggestions.lifestyleRecommendations.filter(r => r.isRelevant).map(r => r.id),
       specificDocuments: aiSuggestions.documentRecommendations.filter(r => r.isRelevant).map(r => r.id)
     };
 
@@ -81,9 +82,7 @@ export class HealthPassService {
     const toggledConditions = conditions.filter(c => dataToggles.specificConditions.includes(c.id));
     const toggledMedications = medications.filter(m => dataToggles.specificMedications.includes(m.id));
     const toggledAllergies = allergies.filter(a => dataToggles.specificAllergies.includes(a.id));
-    const toggledLifestyles = lifestyles.filter(l =>
-      aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id && r.isRelevant)
-    );
+    const toggledLifestyles = lifestyles.filter(l => dataToggles.specificLifestyles.includes(l.id));
     const toggledDocuments = documents.filter(d => dataToggles.specificDocuments.includes(d.id));
 
     // Generate AI profile summary based on toggled items
@@ -193,11 +192,27 @@ export class HealthPassService {
   }
 
   /**
-   * Generate preview of health pass data
+   * Generate preview of health pass data (for doctor's view when scanning QR)
    */
   private async generatePreview(healthPass: HealthPass): Promise<HealthPassPreviewDto> {
-    const user = await userService.findById(healthPass.userId.toString());
+    const userId = healthPass.userId.toString();
     const toggles = healthPass.dataToggles;
+
+    // Fetch user and all health data
+    const [user, conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+      userService.findById(userId),
+      medicalConditionService.findByUserId(userId),
+      medicationService.findByUserId(userId),
+      allergyService.findByUserId(userId),
+      lifestyleService.findByUserId(userId),
+      documentService.findByUserId(userId)
+    ]);
+
+    // Regenerate AI suggestions to get recommendations
+    const aiSuggestions = await aiService.generateHealthPassRecommendations(
+      healthPass.appointmentSpecialty as AppointmentSpecialty,
+      { conditions, medications, allergies, lifestyles, documents }
+    );
 
     const preview: HealthPassPreviewDto = {
       patientName: user.fullName,
@@ -206,41 +221,87 @@ export class HealthPassService {
       appointmentSpecialty: healthPass.appointmentSpecialty as AppointmentSpecialty,
       appointmentDate: healthPass.appointmentDate,
       appointmentNotes: healthPass.appointmentNotes,
-      aiRecommendations: healthPass.aiRecommendations
+      aiRecommendations: healthPass.aiRecommendations,
+      aiProfileSummary: healthPass.aiProfileSummary
     };
 
-    const userId = healthPass.userId.toString();
-
-    if (toggles.medicalConditions) {
-      preview.medicalConditions = await medicalConditionService.getSummaries(
-        userId,
-        toggles.specificConditions
-      );
+    // Build medical conditions with AI recommendations (only toggled ones)
+    if (toggles.medicalConditions && toggles.specificConditions) {
+      const filteredConditions = conditions.filter(c => toggles.specificConditions!.includes(c.id));
+      preview.medicalConditions = filteredConditions.map(c => {
+        const rec = aiSuggestions.conditionRecommendations.find(r => r.id === c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          diagnosedDate: c.diagnosedDate,
+          notes: c.notes,
+          aiRecommendation: rec?.recommendation
+        };
+      });
     }
 
-    if (toggles.medications) {
-      preview.medications = await medicationService.getSummaries(
-        userId,
-        toggles.specificMedications
-      );
+    // Build medications with AI recommendations (only toggled ones)
+    if (toggles.medications && toggles.specificMedications) {
+      const filteredMedications = medications.filter(m => toggles.specificMedications!.includes(m.id));
+      preview.medications = filteredMedications.map(m => {
+        const rec = aiSuggestions.medicationRecommendations.find(r => r.id === m.id);
+        return {
+          id: m.id,
+          medicationName: m.medicationName,
+          dosageAmount: m.dosageAmount,
+          frequency: m.frequency,
+          notes: m.notes,
+          aiRecommendation: rec?.recommendation
+        };
+      });
     }
 
-    if (toggles.allergies) {
-      preview.allergies = await allergyService.getSummaries(
-        userId,
-        toggles.specificAllergies
-      );
+    // Build allergies with AI recommendations (only toggled ones)
+    if (toggles.allergies && toggles.specificAllergies) {
+      const filteredAllergies = allergies.filter(a => toggles.specificAllergies!.includes(a.id));
+      preview.allergies = filteredAllergies.map(a => {
+        const rec = aiSuggestions.allergyRecommendations.find(r => r.id === a.id);
+        return {
+          id: a.id,
+          allergen: a.allergen,
+          type: a.type,
+          severity: a.severity,
+          reaction: a.reaction,
+          aiRecommendation: rec?.recommendation
+        };
+      });
     }
 
-    if (toggles.lifestyleChoices) {
-      preview.lifestyleChoices = await lifestyleService.getSummaries(userId);
+    // Build lifestyle choices with AI recommendations (only toggled ones)
+    if (toggles.lifestyleChoices && toggles.specificLifestyles) {
+      const filteredLifestyles = lifestyles.filter(l => toggles.specificLifestyles!.includes(l.id));
+      preview.lifestyleChoices = filteredLifestyles.map(l => {
+        const rec = aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id);
+        return {
+          id: l.id,
+          category: l.category,
+          description: l.description,
+          frequency: l.frequency,
+          aiRecommendation: rec?.recommendation
+        };
+      });
     }
 
-    if (toggles.documents) {
-      preview.documents = await documentService.getSummaries(
-        userId,
-        toggles.specificDocuments
-      );
+    // Build documents with AI recommendations (only toggled ones)
+    if (toggles.documents && toggles.specificDocuments) {
+      const filteredDocuments = documents.filter(d => toggles.specificDocuments!.includes(d.id));
+      preview.documents = filteredDocuments.map(d => {
+        const rec = aiSuggestions.documentRecommendations.find(r => r.id === d.id);
+        return {
+          id: d.id,
+          documentName: d.documentName,
+          documentType: d.documentType,
+          documentDate: d.documentDate,
+          notes: d.notes,
+          fileUrl: d.fileUrl,
+          aiRecommendation: rec?.recommendation
+        };
+      });
     }
 
     return preview;

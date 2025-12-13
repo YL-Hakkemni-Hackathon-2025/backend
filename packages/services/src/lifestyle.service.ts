@@ -78,12 +78,18 @@ export class LifestyleService {
   /**
    * Get summaries for health pass
    */
-  async getSummaries(userId: string): Promise<LifestyleSummaryDto[]> {
-    const lifestyles = await LifestyleModel.find({ userId, isActive: true });
+  async getSummaries(userId: string, specificIds?: string[]): Promise<LifestyleSummaryDto[]> {
+    let query: any = { userId, isActive: true };
+    if (specificIds && specificIds.length > 0) {
+      query._id = { $in: specificIds };
+    }
+
+    const lifestyles = await LifestyleModel.find(query);
     return lifestyles.map(l => ({
       id: l._id.toString(),
       category: l.category as LifestyleCategory,
-      description: l.description
+      description: l.description,
+      frequency: l.frequency
     }));
   }
 

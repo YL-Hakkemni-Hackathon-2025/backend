@@ -84,6 +84,7 @@ export interface HealthPassDataToggles {
   specificConditions?: string[];
   specificMedications?: string[];
   specificAllergies?: string[];
+  specificLifestyles?: string[];
   specificDocuments?: string[];
 }
 

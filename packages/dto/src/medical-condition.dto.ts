@@ -51,5 +51,7 @@ export class MedicalConditionSummaryDto {
   id!: string;
   name!: string;
   diagnosedDate?: Date;
+  notes?: string;
+  aiRecommendation?: string;
 }
 

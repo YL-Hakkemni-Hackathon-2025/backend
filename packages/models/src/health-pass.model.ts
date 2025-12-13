@@ -38,6 +38,9 @@ class SharedDataToggles implements HealthPassDataToggles {
   public specificAllergies?: string[];
 
   @prop({ type: () => [String] })
+  public specificLifestyles?: string[];
+
+  @prop({ type: () => [String] })
   public specificDocuments?: string[];
 }
 

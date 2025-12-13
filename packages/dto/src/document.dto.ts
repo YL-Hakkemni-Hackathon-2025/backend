@@ -95,5 +95,8 @@ export class DocumentSummaryDto {
   documentName!: string;
   documentType!: DocumentType;
   documentDate?: Date;
+  notes?: string;
+  fileUrl?: string;
+  aiRecommendation?: string;
 }
 

@@ -94,5 +94,7 @@ export class AllergySummaryDto {
   allergen!: string;
   type!: AllergyType;
   severity?: AllergySeverity;
+  reaction?: string;
+  aiRecommendation?: string;
 }
 
