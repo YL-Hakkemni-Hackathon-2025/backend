@@ -71,6 +71,7 @@ Guidelines:
         model: this.modelName,
         contents: prompt,
         config: {
+          temperature: 0, // Deterministic output for consistent results
           responseMimeType: 'application/json'
         }
       });
@@ -150,6 +151,7 @@ Guidelines:
         model: this.modelName,
         contents: prompt,
         config: {
+          temperature: 0, // Deterministic output for consistent results
           responseMimeType: 'application/json'
         }
       });
@@ -229,6 +231,7 @@ Guidelines:
         model: this.modelName,
         contents: prompt,
         config: {
+          temperature: 0, // Deterministic output for consistent results
           responseMimeType: 'application/json'
         }
       });
@@ -329,6 +332,7 @@ Guidelines:
           }
         ],
         config: {
+          temperature: 0, // Deterministic output for consistent results
           responseMimeType: 'application/json'
         }
       });

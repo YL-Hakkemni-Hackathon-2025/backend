@@ -171,7 +171,7 @@ Medications:
 ${userData.medications.map(m => `- ID: "${m.id}" | Name: ${m.medicationName} | Dosage: ${m.dosageAmount} | Frequency: ${m.frequency} | Notes: ${m.notes || 'none'}`).join('\n') || 'None'}
 
 Allergies:
-${userData.allergies.map(a => `- ID: "${a.id}" | Allergen: ${a.allergen} | Type: ${a.type} | Severity: ${a.severity || 'unknown'} | Reaction: ${a.reaction || 'unknown'}`).join('\n') || 'None'}
+${userData.allergies.map(a => `- ID: "${a.id}" | Allergen: ${a.allergen} | Type: ${a.type} | Severity: ${a.severity || 'unknown'} | Notes: ${a.notes || 'none'}`).join('\n') || 'None'}
 
 Lifestyle:
 ${userData.lifestyles.map(l => `- ID: "${l.id}" | Category: ${l.category} | Description: ${l.description} | Frequency: ${l.frequency || 'unknown'}`).join('\n') || 'None'}
@@ -212,6 +212,7 @@ IMPORTANT:
                 model: this.modelName,
                 contents: prompt,
                 config: {
+                    temperature: 0, // Deterministic output for consistent results
                     responseMimeType: 'application/json'
                 }
             });
@@ -322,6 +323,13 @@ IMPORTANT:
             allergies: AllergyResponseDto[];
             lifestyles: LifestyleResponseDto[];
             documents: DocumentResponseDto[];
+        },
+        totalCounts?: {
+            conditions: number;
+            medications: number;
+            allergies: number;
+            lifestyles: number;
+            documents: number;
         }
     ): Promise<string> {
         try {
@@ -334,6 +342,22 @@ IMPORTANT:
                 age--;
             }
 
+            // Helper to format category status
+            const formatCategoryStatus = (
+                sharedItems: any[],
+                totalCount: number | undefined,
+                formatItem: (item: any) => string,
+                categoryName: string
+            ): string => {
+                if (sharedItems.length > 0) {
+                    return sharedItems.map(formatItem).join('\n');
+                }
+                if (totalCount !== undefined && totalCount > 0) {
+                    return `None shared for this ${appointmentSpecialty} appointment (${totalCount} on file, not relevant to this specialty)`;
+                }
+                return 'None on file';
+            };
+
             const prompt = `You are a medical AI assistant. Generate a brief, professional patient profile summary for a ${appointmentSpecialty} appointment.
 
 Patient Information:
@@ -342,30 +366,63 @@ Patient Information:
 - Gender: ${patientInfo.gender || 'Not specified'}
 - Date of Birth: ${patientInfo.dateOfBirth.toISOString().split('T')[0]}
 
-Selected Medical Information to Share:
+Medical Information Shared for This Appointment:
 
 Medical Conditions:
-${toggledData.conditions.length > 0 ? toggledData.conditions.map(c => `- ${c.name}${c.notes ? ` (${c.notes})` : ''}`).join('\n') : 'None selected'}
+${formatCategoryStatus(
+    toggledData.conditions,
+    totalCounts?.conditions,
+    (c) => `- ${c.name}${c.notes ? ` (${c.notes})` : ''}`,
+    'conditions'
+)}
 
 Current Medications:
-${toggledData.medications.length > 0 ? toggledData.medications.map(m => `- ${m.medicationName} ${m.dosageAmount} ${m.frequency}`).join('\n') : 'None selected'}
+${formatCategoryStatus(
+    toggledData.medications,
+    totalCounts?.medications,
+    (m) => `- ${m.medicationName} ${m.dosageAmount} ${m.frequency}`,
+    'medications'
+)}
 
 Known Allergies:
-${toggledData.allergies.length > 0 ? toggledData.allergies.map(a => `- ${a.allergen} (${a.severity || 'severity unknown'}): ${a.reaction || 'reaction unknown'}`).join('\n') : 'None selected'}
+${formatCategoryStatus(
+    toggledData.allergies,
+    totalCounts?.allergies,
+    (a) => `- ${a.allergen} (${a.severity || 'severity unknown'})${a.notes ? `: ${a.notes}` : ''}`,
+    'allergies'
+)}
 
 Lifestyle Factors:
-${toggledData.lifestyles.length > 0 ? toggledData.lifestyles.map(l => `- ${l.category}: ${l.description}`).join('\n') : 'None selected'}
+${formatCategoryStatus(
+    toggledData.lifestyles,
+    totalCounts?.lifestyles,
+    (l) => `- ${l.category}: ${l.description}`,
+    'lifestyles'
+)}
 
 Medical Documents:
-${toggledData.documents.length > 0 ? toggledData.documents.map(d => `- ${d.documentName} (${d.documentType})${d.notes ? `: ${d.notes}` : ''}`).join('\n') : 'None selected'}
+${formatCategoryStatus(
+    toggledData.documents,
+    totalCounts?.documents,
+    (d) => `- ${d.documentName} (${d.documentType})${d.notes ? `: ${d.notes}` : ''}`,
+    'documents'
+)}
 
-Generate a concise 2-3 sentence professional summary that a doctor can quickly read to understand the patient's health profile before the appointment. Focus on clinically relevant information for the ${appointmentSpecialty} specialty. Be factual and do not make assumptions beyond the provided data.
+Generate a concise 2-3 sentence professional summary that a doctor can quickly read to understand the patient's health profile before the appointment. Focus on clinically relevant information for the ${appointmentSpecialty} specialty.
+
+IMPORTANT RULES:
+- If a category says "None on file", the patient has no records in that category.
+- If a category says "None shared... (X on file, not relevant)", the patient HAS records but they were deemed not relevant to this specialty. DO NOT say the patient has "no allergies" or "no conditions" - instead mention they exist but weren't shared for this visit.
+- Be factual and do not make assumptions beyond the provided data.
 
 Respond with ONLY the summary text, no JSON, no formatting, no quotes.`;
 
             const response = await ai.models.generateContent({
                 model: this.modelName,
-                contents: prompt
+                contents: prompt,
+                config: {
+                    temperature: 0 // Deterministic output for consistent results
+                }
             });
 
             const summary = response.text?.trim();
@@ -453,6 +510,7 @@ Respond with ONLY the summary text, no JSON, no formatting, no quotes.`;
                 }
             ],
             config: {
+                temperature: 0, // Deterministic output for consistent results
                 responseMimeType: 'application/json'
             }
         });

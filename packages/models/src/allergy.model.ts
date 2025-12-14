@@ -40,20 +40,17 @@ export class Allergy {
   @prop({ required: true })
   public allergen!: string;
 
-  @prop({ enum: AllergyType, required: true })
-  public type!: AllergyType;
+  @prop({ enum: AllergyType, default: AllergyType.OTHER })
+  public type!: AllergyType; // AI-inferred
 
   @prop({ enum: AllergySeverity })
   public severity?: AllergySeverity;
 
   @prop()
-  public reaction?: string;
-
-  @prop()
   public diagnosedDate?: Date;
 
   @prop()
-  public notes?: string;
+  public notes?: string; // Include reaction details here
 
   @prop({ default: true })
   public isActive!: boolean;

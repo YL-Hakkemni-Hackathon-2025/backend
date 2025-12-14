@@ -15,36 +15,58 @@ router.use(authenticate);
  *   post:
  *     tags: [Allergies]
  *     summary: Create an allergy
+ *     description: |
+ *       Create a new allergy record. The allergy type (drug, food, environmental, etc.)
+ *       is automatically inferred by AI based on the allergen name.
+ *
+ *       Include reaction details in the notes field.
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [allergen, type]
+ *             required: [allergen]
  *             properties:
  *               allergen:
  *                 type: string
  *                 example: Peanuts
- *               type:
- *                 type: string
- *                 enum: [drug, food, environmental, insect, latex, other]
- *                 example: food
  *               severity:
  *                 type: string
  *                 enum: [mild, moderate, severe, life_threatening]
  *                 example: severe
- *               reaction:
- *                 type: string
- *                 example: Anaphylaxis
  *               diagnosedDate:
  *                 type: string
  *                 format: date
  *               notes:
  *                 type: string
+ *                 description: Include reaction details here
+ *                 example: "Causes anaphylaxis. Carry EpiPen at all times."
  *     responses:
  *       201:
- *         description: Allergy created
+ *         description: Allergy created (type is AI-inferred)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     allergen:
+ *                       type: string
+ *                     type:
+ *                       type: string
+ *                       description: AI-inferred allergy type
+ *                       enum: [drug, food, environmental, insect, latex, other]
+ *                     severity:
+ *                       type: string
+ *                     notes:
+ *                       type: string
  *   get:
  *     tags: [Allergies]
  *     summary: Get all allergies
@@ -86,6 +108,9 @@ router.get('/', allergyController.findAll.bind(allergyController));
  *   patch:
  *     tags: [Allergies]
  *     summary: Update an allergy
+ *     description: |
+ *       Update an allergy record. If the allergen name is changed, the type will be
+ *       re-inferred by AI automatically.
  *     parameters:
  *       - name: id
  *         in: path
@@ -100,19 +125,15 @@ router.get('/', allergyController.findAll.bind(allergyController));
  *             properties:
  *               allergen:
  *                 type: string
- *               type:
- *                 type: string
- *                 enum: [drug, food, environmental, insect, latex, other]
  *               severity:
  *                 type: string
  *                 enum: [mild, moderate, severe, life_threatening]
- *               reaction:
- *                 type: string
  *               diagnosedDate:
  *                 type: string
  *                 format: date
  *               notes:
  *                 type: string
+ *                 description: Include reaction details here
  *               isActive:
  *                 type: boolean
  *     responses:

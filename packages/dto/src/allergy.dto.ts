@@ -22,16 +22,9 @@ export class CreateAllergyDto {
   @IsString()
   allergen!: string;
 
-  @IsEnum(AllergyType)
-  type!: AllergyType;
-
   @IsOptional()
   @IsEnum(AllergySeverity)
   severity?: AllergySeverity;
-
-  @IsOptional()
-  @IsString()
-  reaction?: string;
 
   @IsOptional()
   @IsDate()
@@ -40,7 +33,7 @@ export class CreateAllergyDto {
 
   @IsOptional()
   @IsString()
-  notes?: string;
+  notes?: string; // Include reaction details here
 }
 
 export class UpdateAllergyDto {
@@ -49,16 +42,8 @@ export class UpdateAllergyDto {
   allergen?: string;
 
   @IsOptional()
-  @IsEnum(AllergyType)
-  type?: AllergyType;
-
-  @IsOptional()
   @IsEnum(AllergySeverity)
   severity?: AllergySeverity;
-
-  @IsOptional()
-  @IsString()
-  reaction?: string;
 
   @IsOptional()
   @IsDate()
@@ -67,7 +52,7 @@ export class UpdateAllergyDto {
 
   @IsOptional()
   @IsString()
-  notes?: string;
+  notes?: string; // Include reaction details here
 
   @IsOptional()
   @IsBoolean()
@@ -79,9 +64,8 @@ export class AllergyResponseDto {
   id!: string;
   userId!: string;
   allergen!: string;
-  type!: AllergyType;
+  type!: AllergyType; // AI-inferred
   severity?: AllergySeverity;
-  reaction?: string;
   diagnosedDate?: Date;
   notes?: string;
   isActive!: boolean;
@@ -92,9 +76,8 @@ export class AllergyResponseDto {
 export class AllergySummaryDto {
   id!: string;
   allergen!: string;
-  type!: AllergyType;
+  type!: AllergyType; // AI-inferred
   severity?: AllergySeverity;
-  reaction?: string;
   aiRecommendation?: string;
 }
 

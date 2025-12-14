@@ -5,17 +5,29 @@ import {
   MedicationResponseDto,
   MedicationSummaryDto
 } from '@hakkemni/dto';
-import { NotFoundError, MedicationFrequency } from '@hakkemni/common';
+import { NotFoundError, MedicationFrequency, ConflictError } from '@hakkemni/common';
 
 export class MedicationService {
   /**
    * Create a new medication
    */
   async create(userId: string, dto: CreateMedicationDto): Promise<MedicationResponseDto> {
+    // Check for duplicate (case-insensitive, same dosage, active only)
+    const existingMedication = await MedicationModel.findOne({
+      userId,
+      medicationName: { $regex: new RegExp(`^${dto.medicationName.trim()}$`, 'i') },
+      dosageAmount: { $regex: new RegExp(`^${dto.dosageAmount.trim()}$`, 'i') },
+      isActive: true
+    });
+
+    if (existingMedication) {
+      throw new ConflictError(`You already have "${dto.medicationName} ${dto.dosageAmount}" in your medications`);
+    }
+
     const medication = await MedicationModel.create({
       userId,
-      medicationName: dto.medicationName,
-      dosageAmount: dto.dosageAmount,
+      medicationName: dto.medicationName.trim(),
+      dosageAmount: dto.dosageAmount.trim(),
       frequency: dto.frequency,
       startDate: dto.startDate,
       endDate: dto.endDate,
@@ -49,9 +61,39 @@ export class MedicationService {
    * Update medication
    */
   async update(id: string, dto: UpdateMedicationDto): Promise<MedicationResponseDto> {
+    // Get the current medication to check userId
+    const currentMedication = await MedicationModel.findById(id);
+    if (!currentMedication) {
+      throw new NotFoundError('Medication not found');
+    }
+
+    // If medication name or dosage is being updated, check for duplicates
+    const newName = dto.medicationName?.trim() || currentMedication.medicationName;
+    const newDosage = dto.dosageAmount?.trim() || currentMedication.dosageAmount;
+
+    if (dto.medicationName || dto.dosageAmount) {
+      const existingMedication = await MedicationModel.findOne({
+        userId: currentMedication.userId,
+        medicationName: { $regex: new RegExp(`^${newName}$`, 'i') },
+        dosageAmount: { $regex: new RegExp(`^${newDosage}$`, 'i') },
+        isActive: true,
+        _id: { $ne: id } // Exclude current record
+      });
+
+      if (existingMedication) {
+        throw new ConflictError(`You already have "${newName} ${newDosage}" in your medications`);
+      }
+    }
+
+    const updateData = {
+      ...dto,
+      medicationName: dto.medicationName?.trim(),
+      dosageAmount: dto.dosageAmount?.trim()
+    };
+
     const medication = await MedicationModel.findByIdAndUpdate(
       id,
-      { $set: dto },
+      { $set: updateData },
       { new: true }
     );
 

@@ -40,6 +40,7 @@ export class TranslationService {
         model: this.modelName,
         contents: prompt,
         config: {
+          temperature: 0, // Deterministic output for consistent transliteration
           systemInstruction: 'You are an expert in Arabic to English transliteration, specializing in Lebanese names and places. You provide accurate phonetic conversions. Only respond with the transliterated text, nothing else.'
         }
       });

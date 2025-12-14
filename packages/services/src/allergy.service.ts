@@ -5,19 +5,81 @@ import {
   AllergyResponseDto,
   AllergySummaryDto
 } from '@hakkemni/dto';
-import { NotFoundError } from '@hakkemni/common';
+import { NotFoundError, ConflictError } from '@hakkemni/common';
+import { GoogleGenAI } from '@google/genai';
+
+// Initialize Gemini for allergy type inference
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+const INFERENCE_MODEL = 'gemini-2.5-flash-lite';
 
 export class AllergyService {
+  /**
+   * Infer allergy type from allergen name using AI
+   */
+  private async inferAllergyType(allergen: string): Promise<AllergyType> {
+    try {
+      const prompt = `Classify this allergen into one of these categories: drug, food, environmental, insect, latex, other.
+
+Allergen: "${allergen}"
+
+Respond with ONLY one word from: drug, food, environmental, insect, latex, other
+
+Examples:
+- "Penicillin" → drug
+- "Peanuts" → food
+- "Pollen" → environmental
+- "Bee stings" → insect
+- "Latex gloves" → latex`;
+
+      const response = await ai.models.generateContent({
+        model: INFERENCE_MODEL,
+        contents: prompt,
+        config: {
+          temperature: 0 // Deterministic output for consistent results
+        }
+      });
+
+      const result = response.text?.trim().toLowerCase();
+
+      const typeMap: Record<string, AllergyType> = {
+        'drug': AllergyType.DRUG,
+        'food': AllergyType.FOOD,
+        'environmental': AllergyType.ENVIRONMENTAL,
+        'insect': AllergyType.INSECT,
+        'latex': AllergyType.LATEX,
+        'other': AllergyType.OTHER
+      };
+
+      return typeMap[result || ''] || AllergyType.OTHER;
+    } catch (error) {
+      console.error('Error inferring allergy type:', error);
+      return AllergyType.OTHER;
+    }
+  }
+
   /**
    * Create a new allergy
    */
   async create(userId: string, dto: CreateAllergyDto): Promise<AllergyResponseDto> {
+    // Check for duplicate (case-insensitive, active only)
+    const existingAllergy = await AllergyModel.findOne({
+      userId,
+      allergen: { $regex: new RegExp(`^${dto.allergen.trim()}$`, 'i') },
+      isActive: true
+    });
+
+    if (existingAllergy) {
+      throw new ConflictError(`You already have "${dto.allergen}" in your allergies`);
+    }
+
+    // Infer allergy type from allergen name
+    const inferredType = await this.inferAllergyType(dto.allergen);
+
     const allergy = await AllergyModel.create({
       userId,
-      allergen: dto.allergen,
-      type: dto.type,
+      allergen: dto.allergen.trim(),
+      type: inferredType,
       severity: dto.severity,
-      reaction: dto.reaction,
       diagnosedDate: dto.diagnosedDate,
       notes: dto.notes
     });
@@ -49,9 +111,33 @@ export class AllergyService {
    * Update allergy
    */
   async update(id: string, dto: UpdateAllergyDto): Promise<AllergyResponseDto> {
+    // Get the current allergy to check userId
+    const currentAllergy = await AllergyModel.findById(id);
+    if (!currentAllergy) {
+      throw new NotFoundError('Allergy not found');
+    }
+
+    // If allergen is being updated, check for duplicates and re-infer the type
+    let updateData: any = { ...dto };
+    if (dto.allergen) {
+      const existingAllergy = await AllergyModel.findOne({
+        userId: currentAllergy.userId,
+        allergen: { $regex: new RegExp(`^${dto.allergen.trim()}$`, 'i') },
+        isActive: true,
+        _id: { $ne: id } // Exclude current record
+      });
+
+      if (existingAllergy) {
+        throw new ConflictError(`You already have "${dto.allergen}" in your allergies`);
+      }
+
+      updateData.allergen = dto.allergen.trim();
+      updateData.type = await this.inferAllergyType(dto.allergen);
+    }
+
     const allergy = await AllergyModel.findByIdAndUpdate(
       id,
-      { $set: dto },
+      { $set: updateData },
       { new: true }
     );
 
@@ -101,7 +187,6 @@ export class AllergyService {
       allergen: allergy.allergen,
       type: allergy.type as any,
       severity: allergy.severity as any,
-      reaction: allergy.reaction,
       diagnosedDate: allergy.diagnosedDate,
       notes: allergy.notes,
       isActive: allergy.isActive,

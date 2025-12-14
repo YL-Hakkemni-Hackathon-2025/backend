@@ -99,6 +99,13 @@ export class HealthPassService {
         allergies: toggledAllergies,
         lifestyles: toggledLifestyles,
         documents: toggledDocuments
+      },
+      {
+        conditions: conditions.length,
+        medications: medications.length,
+        allergies: allergies.length,
+        lifestyles: lifestyles.length,
+        documents: documents.length
       }
     );
 
@@ -274,7 +281,7 @@ export class HealthPassService {
           allergen: a.allergen,
           type: a.type,
           severity: a.severity,
-          reaction: a.reaction,
+          notes: a.notes,
           aiRecommendation: rec?.recommendation
         };
       });

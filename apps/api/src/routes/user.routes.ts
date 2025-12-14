@@ -172,11 +172,10 @@ router.patch(
  *                           type:
  *                             type: string
  *                             enum: [drug, food, environmental, insect, latex, other]
+ *                             description: AI-inferred allergy type
  *                           severity:
  *                             type: string
  *                             enum: [mild, moderate, severe, life_threatening]
- *                           reaction:
- *                             type: string
  *                           notes:
  *                             type: string
  *                           isActive:

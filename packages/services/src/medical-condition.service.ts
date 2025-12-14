@@ -5,16 +5,27 @@ import {
   MedicalConditionResponseDto,
   MedicalConditionSummaryDto
 } from '@hakkemni/dto';
-import { NotFoundError } from '@hakkemni/common';
+import { NotFoundError, ConflictError } from '@hakkemni/common';
 
 export class MedicalConditionService {
   /**
    * Create a new medical condition
    */
   async create(userId: string, dto: CreateMedicalConditionDto): Promise<MedicalConditionResponseDto> {
+    // Check for duplicate (case-insensitive, active only)
+    const existingCondition = await MedicalConditionModel.findOne({
+      userId,
+      name: { $regex: new RegExp(`^${dto.name.trim()}$`, 'i') },
+      isActive: true
+    });
+
+    if (existingCondition) {
+      throw new ConflictError(`You already have "${dto.name}" in your medical conditions`);
+    }
+
     const condition = await MedicalConditionModel.create({
       userId,
-      name: dto.name,
+      name: dto.name.trim(),
       diagnosedDate: dto.diagnosedDate,
       notes: dto.notes
     });
@@ -46,9 +57,29 @@ export class MedicalConditionService {
    * Update condition
    */
   async update(id: string, dto: UpdateMedicalConditionDto): Promise<MedicalConditionResponseDto> {
+    // Get the current condition to check userId
+    const currentCondition = await MedicalConditionModel.findById(id);
+    if (!currentCondition) {
+      throw new NotFoundError('Medical condition not found');
+    }
+
+    // If name is being updated, check for duplicates
+    if (dto.name) {
+      const existingCondition = await MedicalConditionModel.findOne({
+        userId: currentCondition.userId,
+        name: { $regex: new RegExp(`^${dto.name.trim()}$`, 'i') },
+        isActive: true,
+        _id: { $ne: id } // Exclude current record
+      });
+
+      if (existingCondition) {
+        throw new ConflictError(`You already have "${dto.name}" in your medical conditions`);
+      }
+    }
+
     const condition = await MedicalConditionModel.findByIdAndUpdate(
       id,
-      { $set: dto },
+      { $set: { ...dto, name: dto.name?.trim() } },
       { new: true }
     );
 
