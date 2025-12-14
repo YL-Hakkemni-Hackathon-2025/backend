@@ -1,12 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
-import { AIProcessingError } from '@hakkemni/common';
+import { AIProcessingError, MedicationFrequency } from '@hakkemni/common';
 import {
   MedicalConditionSuggestionDto,
   MedicationSuggestionDto,
   AllergySuggestionDto,
   MedicalConditionAutocompleteResponseDto,
   MedicationAutocompleteResponseDto,
-  AllergyAutocompleteResponseDto
+  AllergyAutocompleteResponseDto,
+  MedicinePhotoScanResultDto,
+  MedicinePhotoScanResponseDto
 } from '@hakkemni/dto';
 
 // Initialize Gemini with new SDK
@@ -253,6 +255,139 @@ Guidelines:
     } catch (error) {
       console.error('Allergy autocomplete error:', error);
       return { suggestions: [], query, hasMore: false };
+    }
+  }
+
+  /**
+   * Scan a medicine photo and extract medication information for form prefill
+   * Supports images of pill bottles, medicine boxes, prescription labels, etc.
+   */
+  async scanMedicinePhoto(
+    imageBuffer: Buffer,
+    mimeType: string = 'image/jpeg'
+  ): Promise<MedicinePhotoScanResponseDto> {
+    try {
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return { success: false, error: 'No image provided' };
+      }
+
+      // Convert buffer to base64 for Gemini API
+      const base64Image = imageBuffer.toString('base64');
+
+      const prompt = `You are a pharmaceutical AI assistant. Analyze this image of medicine (pill bottle, medicine box, prescription label, blister pack, etc.) and extract all medication information visible.
+
+Extract the following information if visible:
+1. Medication name (brand name and/or generic name)
+2. Dosage/strength (e.g., "500mg", "10mg/5ml")
+3. Form (tablet, capsule, syrup, injection, cream, etc.)
+4. Recommended frequency/dosage instructions
+5. Manufacturer/pharmaceutical company
+6. Active ingredients
+7. Usage instructions
+8. Warnings or precautions
+9. Expiry date if visible
+
+Respond in JSON format:
+{
+  "medicationName": "Primary name of the medication",
+  "genericName": "Generic/INN name if different from brand",
+  "brandName": "Brand name if visible",
+  "dosageAmount": "Dosage amount ready for form (e.g., '500mg', '10mg')",
+  "frequency": "One of: once_daily, twice_daily, three_times_daily, four_times_daily, as_needed, weekly, monthly, other",
+  "form": "Medication form (tablet, capsule, syrup, etc.)",
+  "strength": "Full strength notation (e.g., '500mg per tablet')",
+  "manufacturer": "Pharmaceutical company name",
+  "activeIngredients": ["List of active ingredients"],
+  "instructions": "Usage instructions if visible",
+  "warnings": ["Any warnings or precautions"],
+  "expiryDate": "Expiry date if visible (YYYY-MM format)",
+  "confidence": 0.0-1.0,
+  "notes": "Any additional relevant information extracted"
+}
+
+Guidelines:
+- If you cannot read certain information, omit that field
+- Set confidence based on image clarity and how much information you could extract
+- For frequency, map common instructions like "twice a day" to "twice_daily"
+- Be accurate with medication names - this is critical for patient safety
+- If the image is not a medicine or is unreadable, set confidence to 0`;
+
+      const response = await ai.models.generateContent({
+        model: this.modelName,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Image
+                }
+              }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const rawContent = response.text;
+      if (!rawContent) {
+        return { success: false, error: 'No response from AI' };
+      }
+
+      const parsed = JSON.parse(rawContent);
+
+      // Check if we got valid data
+      if (!parsed.medicationName || parsed.confidence === 0) {
+        return {
+          success: false,
+          error: 'Could not identify medication from the image. Please ensure the image clearly shows the medicine label.',
+          rawExtractedText: rawContent
+        };
+      }
+
+      // Map frequency string to enum
+      const frequencyMap: Record<string, MedicationFrequency> = {
+        'once_daily': MedicationFrequency.ONCE_DAILY,
+        'twice_daily': MedicationFrequency.TWICE_DAILY,
+        'three_times_daily': MedicationFrequency.THREE_TIMES_DAILY,
+        'four_times_daily': MedicationFrequency.FOUR_TIMES_DAILY,
+        'as_needed': MedicationFrequency.AS_NEEDED,
+        'weekly': MedicationFrequency.WEEKLY,
+        'monthly': MedicationFrequency.MONTHLY,
+        'other': MedicationFrequency.OTHER
+      };
+
+      const result: MedicinePhotoScanResultDto = {
+        medicationName: parsed.medicationName,
+        genericName: parsed.genericName || undefined,
+        brandName: parsed.brandName || undefined,
+        dosageAmount: parsed.dosageAmount || undefined,
+        frequency: frequencyMap[parsed.frequency] || undefined,
+        form: parsed.form || undefined,
+        strength: parsed.strength || undefined,
+        manufacturer: parsed.manufacturer || undefined,
+        activeIngredients: parsed.activeIngredients || undefined,
+        instructions: parsed.instructions || undefined,
+        warnings: parsed.warnings || undefined,
+        expiryDate: parsed.expiryDate || undefined,
+        confidence: parsed.confidence || 0.5,
+        notes: parsed.notes || undefined
+      };
+
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      console.error('Medicine photo scan error:', error);
+      return {
+        success: false,
+        error: 'Failed to process medicine image. Please try again with a clearer photo.'
+      };
     }
   }
 }

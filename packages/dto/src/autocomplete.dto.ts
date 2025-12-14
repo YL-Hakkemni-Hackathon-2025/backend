@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsNumber, IsEnum, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MedicationFrequency } from '@hakkemni/common';
 
 // Enum for autocomplete types
 export enum AutocompleteType {
@@ -83,4 +84,31 @@ export class AllergyAutocompleteResponseDto {
   query!: string;
   hasMore!: boolean;
 }
+
+// Medicine Photo Scan DTOs (uses multipart/form-data upload, no request DTO needed)
+
+export class MedicinePhotoScanResultDto {
+  medicationName!: string;
+  genericName?: string;
+  brandName?: string;
+  dosageAmount?: string;
+  frequency?: MedicationFrequency;
+  form?: string; // tablet, capsule, syrup, etc.
+  strength?: string; // e.g., "500mg", "10mg/5ml"
+  manufacturer?: string;
+  activeIngredients?: string[];
+  instructions?: string;
+  warnings?: string[];
+  expiryDate?: string;
+  confidence!: number; // 0-1 confidence score
+  notes?: string; // Any additional extracted information
+}
+
+export class MedicinePhotoScanResponseDto {
+  success!: boolean;
+  data?: MedicinePhotoScanResultDto;
+  error?: string;
+  rawExtractedText?: string; // For debugging
+}
+
 

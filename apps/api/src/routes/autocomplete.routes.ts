@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { autocompleteController } from '../controllers';
 import { authenticate } from '../middleware/auth';
+import { uploadSingleImage } from '../middleware/upload';
 
 const router = Router();
 
@@ -270,6 +271,129 @@ router.get('/medications', autocompleteController.getMedications.bind(autocomple
  *         description: Unauthorized - Invalid or missing token
  */
 router.get('/allergies', autocompleteController.getAllergies.bind(autocompleteController));
+
+/**
+ * @openapi
+ * /autocomplete/scan-medicine:
+ *   post:
+ *     tags: [Autocomplete]
+ *     summary: Scan medicine photo to prefill medication form
+ *     description: |
+ *       AI-powered medicine photo scanner. Upload a photo of a medicine (pill bottle,
+ *       medicine box, prescription label, blister pack) and get extracted medication
+ *       information to prefill the medication form.
+ *
+ *       **Supported images:**
+ *       - Pill bottles with labels
+ *       - Medicine boxes/packaging
+ *       - Prescription labels
+ *       - Blister packs with medication info
+ *
+ *       **Extracted information includes:**
+ *       - Medication name (brand and generic)
+ *       - Dosage and strength
+ *       - Recommended frequency
+ *       - Form (tablet, capsule, syrup, etc.)
+ *       - Manufacturer
+ *       - Active ingredients
+ *       - Usage instructions and warnings
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - image
+ *             properties:
+ *               image:
+ *                 type: string
+ *                 format: binary
+ *                 description: Medicine image file (JPEG, PNG, WebP, HEIC)
+ *     responses:
+ *       200:
+ *         description: Successfully extracted medication information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     medicationName:
+ *                       type: string
+ *                       example: "Lisinopril"
+ *                     genericName:
+ *                       type: string
+ *                       example: "Lisinopril"
+ *                     brandName:
+ *                       type: string
+ *                       example: "Zestril"
+ *                     dosageAmount:
+ *                       type: string
+ *                       example: "10mg"
+ *                     frequency:
+ *                       type: string
+ *                       enum: [once_daily, twice_daily, three_times_daily, four_times_daily, as_needed, weekly, monthly, other]
+ *                       example: "once_daily"
+ *                     form:
+ *                       type: string
+ *                       example: "tablet"
+ *                     strength:
+ *                       type: string
+ *                       example: "10mg per tablet"
+ *                     manufacturer:
+ *                       type: string
+ *                       example: "AstraZeneca"
+ *                     activeIngredients:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["Lisinopril dihydrate"]
+ *                     instructions:
+ *                       type: string
+ *                       example: "Take one tablet daily with or without food"
+ *                     warnings:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["May cause dizziness", "Avoid potassium supplements"]
+ *                     expiryDate:
+ *                       type: string
+ *                       example: "2025-12"
+ *                     confidence:
+ *                       type: number
+ *                       minimum: 0
+ *                       maximum: 1
+ *                       example: 0.85
+ *                     notes:
+ *                       type: string
+ *                       example: "ACE inhibitor for blood pressure control"
+ *       400:
+ *         description: Invalid image or could not extract information
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Could not identify medication from the image. Please ensure the image clearly shows the medicine label."
+ *       401:
+ *         description: Unauthorized - Invalid or missing token
+ */
+router.post(
+  '/scan-medicine',
+  uploadSingleImage('image'),
+  autocompleteController.scanMedicinePhoto.bind(autocompleteController)
+);
 
 export { router as autocompleteRouter };
 export default router;

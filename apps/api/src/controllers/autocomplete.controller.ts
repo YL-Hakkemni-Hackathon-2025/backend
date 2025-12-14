@@ -59,6 +59,33 @@ export class AutocompleteController {
       next(error);
     }
   }
+
+  /**
+   * Scan a medicine photo and extract medication information for form prefill
+   */
+  async scanMedicinePhoto(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const file = req.file;
+
+      if (!file) {
+        res.status(400).json({ success: false, error: 'No image file provided. Please upload an image.' });
+        return;
+      }
+
+      const result = await autocompleteService.scanMedicinePhoto(
+        file.buffer,
+        file.mimetype
+      );
+
+      if (result.success) {
+        res.json({ success: true, data: result.data });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const autocompleteController = new AutocompleteController();
