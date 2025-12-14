@@ -42,7 +42,8 @@ Authorization: Bearer <access_token>
       { name: 'Allergies', description: 'Manage allergies' },
       { name: 'Lifestyles', description: 'Manage lifestyle choices (smoking, exercise, etc.)' },
       { name: 'Documents', description: 'Upload and manage medical documents' },
-      { name: 'Health Passes', description: 'Generate and manage QR-coded health passes' }
+      { name: 'Health Passes', description: 'Generate and manage QR-coded health passes' },
+      { name: 'Autocomplete', description: 'AI-powered smart autocomplete for medical conditions, medications, and allergies' }
     ],
     components: {
       securitySchemes: {

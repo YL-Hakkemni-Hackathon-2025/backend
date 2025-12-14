@@ -8,4 +8,5 @@ export * from './document.dto';
 export * from './health-pass.dto';
 export * from './auth.dto';
 export * from './common.dto';
+export * from './autocomplete.dto';
 

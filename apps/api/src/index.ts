@@ -15,6 +15,7 @@ import { allergyRouter } from './routes/allergy.routes';
 import { lifestyleRouter } from './routes/lifestyle.routes';
 import { documentRouter } from './routes/document.routes';
 import { healthPassRouter } from './routes/health-pass.routes';
+import { autocompleteRouter } from './routes/autocomplete.routes';
 import { openApiSpec } from './docs/openapi';
 
 const app = express();
@@ -72,6 +73,7 @@ apiRouter.use('/allergies', allergyRouter);
 apiRouter.use('/lifestyles', lifestyleRouter);
 apiRouter.use('/documents', documentRouter);
 apiRouter.use('/health-passes', healthPassRouter);
+apiRouter.use('/autocomplete', autocompleteRouter);
 
 app.use('/api/v1', apiRouter);
 

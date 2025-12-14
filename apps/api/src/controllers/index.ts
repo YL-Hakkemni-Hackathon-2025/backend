@@ -6,4 +6,5 @@ export * from './allergy.controller';
 export * from './lifestyle.controller';
 export * from './document.controller';
 export * from './health-pass.controller';
+export * from './autocomplete.controller';
 
