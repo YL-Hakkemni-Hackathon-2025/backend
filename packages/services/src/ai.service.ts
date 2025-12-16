@@ -10,7 +10,7 @@ import {
     MedicalConditionResponseDto,
     MedicationResponseDto,
     AllergyResponseDto,
-    LifestyleResponseDto,
+    HabitResponseDto,
     DocumentResponseDto,
     AiHealthPassSuggestionsDto,
     AiItemRecommendationDto
@@ -155,7 +155,7 @@ Respond in JSON format:
             conditions: MedicalConditionResponseDto[];
             medications: MedicationResponseDto[];
             allergies: AllergyResponseDto[];
-            lifestyles: LifestyleResponseDto[];
+            habits: HabitResponseDto[];
             documents: DocumentResponseDto[];
         }
     ): Promise<AiHealthPassSuggestionsDto> {
@@ -171,10 +171,10 @@ Medications:
 ${userData.medications.map(m => `- ID: "${m.id}" | Name: ${m.medicationName} | Dosage: ${m.dosageAmount} | Frequency: ${m.frequency} | Notes: ${m.notes || 'none'}`).join('\n') || 'None'}
 
 Allergies:
-${userData.allergies.map(a => `- ID: "${a.id}" | Allergen: ${a.allergen} | Type: ${a.type} | Severity: ${a.severity || 'unknown'} | Notes: ${a.notes || 'none'}`).join('\n') || 'None'}
+${userData.allergies.map(a => `- ID: "${a.id}" | Allergen: ${a.allergen} | Severity: ${a.severity || 'unknown'} | Notes: ${a.notes || 'none'}`).join('\n') || 'None'}
 
-Lifestyle:
-${userData.lifestyles.map(l => `- ID: "${l.id}" | Category: ${l.category} | Description: ${l.description} | Frequency: ${l.frequency || 'unknown'}`).join('\n') || 'None'}
+Lifestyle Habits:
+${userData.habits.map(h => `- ID: "${h.category}" | Category: ${h.category} | Frequency: ${h.frequency} | Notes: ${h.notes || 'none'}`).join('\n') || 'None'}
 
 Documents:
 ${userData.documents.map(d => `- ID: "${d.id}" | Name: ${d.documentName} | Type: ${d.documentType} | Date: ${d.documentDate || 'unknown'} | Notes: ${d.notes || 'none'}`).join('\n') || 'None'}
@@ -194,8 +194,8 @@ Respond in JSON format exactly like this:
   "allergyRecommendations": [
     { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
-  "lifestyleRecommendations": [
-    { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
+  "habitRecommendations": [
+    { "id": "category-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
   ],
   "documentRecommendations": [
     { "id": "exact-id-from-above", "isRelevant": true/false, "recommendation": "Single line reason" }
@@ -205,7 +205,7 @@ Respond in JSON format exactly like this:
 
 IMPORTANT:
 - You MUST include ALL items from each category in your response, even if not relevant
-- Use the EXACT IDs provided above
+- Use the EXACT IDs provided above (for habits, use the category as the ID)
 - Keep recommendations to ONE LINE only (max 10-15 words)`;
 
             const response = await ai.models.generateContent({
@@ -252,10 +252,10 @@ IMPORTANT:
                 return found ? { id: a.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(a.id);
             });
 
-            // Map and validate lifestyle recommendations
-            const lifestyleRecommendations: AiItemRecommendationDto[] = userData.lifestyles.map(l => {
-                const found = parsed.lifestyleRecommendations?.find((r: any) => r.id === l.id);
-                return found ? { id: l.id, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(l.id);
+            // Map and validate habit recommendations (use category as ID)
+            const habitRecommendations: AiItemRecommendationDto[] = userData.habits.map(h => {
+                const found = parsed.habitRecommendations?.find((r: any) => r.id === h.category);
+                return found ? { id: h.category, isRelevant: !!found.isRelevant, recommendation: found.recommendation || '' } : createDefaultRecommendation(h.category);
             });
 
             // Map and validate document recommendations
@@ -268,7 +268,7 @@ IMPORTANT:
                 conditionRecommendations,
                 medicationRecommendations,
                 allergyRecommendations,
-                lifestyleRecommendations,
+                habitRecommendations,
                 documentRecommendations,
                 overallRecommendation: parsed.overallRecommendation || 'Share relevant medical information with your doctor.'
             };
@@ -291,8 +291,8 @@ IMPORTANT:
                     isRelevant: true,
                     recommendation: 'Important for medication safety.'
                 })),
-                lifestyleRecommendations: userData.lifestyles.map(l => ({
-                    id: l.id,
+                habitRecommendations: userData.habits.map(h => ({
+                    id: h.category,
                     isRelevant: false,
                     recommendation: 'Share if relevant to your appointment.'
                 })),
@@ -321,14 +321,14 @@ IMPORTANT:
             conditions: MedicalConditionResponseDto[];
             medications: MedicationResponseDto[];
             allergies: AllergyResponseDto[];
-            lifestyles: LifestyleResponseDto[];
+            habits: HabitResponseDto[];
             documents: DocumentResponseDto[];
         },
         totalCounts?: {
             conditions: number;
             medications: number;
             allergies: number;
-            lifestyles: number;
+            habits: number;
             documents: number;
         }
     ): Promise<string> {
@@ -392,12 +392,12 @@ ${formatCategoryStatus(
     'allergies'
 )}
 
-Lifestyle Factors:
+Lifestyle Habits:
 ${formatCategoryStatus(
-    toggledData.lifestyles,
-    totalCounts?.lifestyles,
-    (l) => `- ${l.category}: ${l.description}`,
-    'lifestyles'
+    toggledData.habits,
+    totalCounts?.habits,
+    (h) => `- ${h.category}: ${h.frequency}${h.notes ? ` (${h.notes})` : ''}`,
+    'habits'
 )}
 
 Medical Documents:
@@ -456,7 +456,7 @@ Respond with ONLY the summary text, no JSON, no formatting, no quotes.`;
             conditions: MedicalConditionResponseDto[];
             medications: MedicationResponseDto[];
             allergies: AllergyResponseDto[];
-            lifestyles: LifestyleResponseDto[];
+            habits: HabitResponseDto[];
             documents: DocumentResponseDto[];
         }
     ): string {

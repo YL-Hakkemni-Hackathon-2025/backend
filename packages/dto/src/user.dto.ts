@@ -108,7 +108,7 @@ export class UserFullSummaryDto {
   medicalConditions!: MedicalConditionResponseDto[];
   medications!: MedicationResponseDto[];
   allergies!: AllergyResponseDto[];
-  lifestyles!: LifestyleResponseDto[];
+  lifestyle!: LifestyleResponseDto | null;
   documents!: DocumentResponseDto[];
 }
 

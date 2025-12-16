@@ -12,7 +12,7 @@ import { userRouter } from './routes/user.routes';
 import { medicalConditionRouter } from './routes/medical-condition.routes';
 import { medicationRouter } from './routes/medication.routes';
 import { allergyRouter } from './routes/allergy.routes';
-import { lifestyleRouter } from './routes/lifestyle.routes';
+import lifestyleRouter from './routes/lifestyle.routes';
 import { documentRouter } from './routes/document.routes';
 import { healthPassRouter } from './routes/health-pass.routes';
 import { autocompleteRouter } from './routes/autocomplete.routes';

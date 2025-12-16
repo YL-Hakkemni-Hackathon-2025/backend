@@ -3,47 +3,55 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { lifestyleService } from '@hakkemni/services';
 
 export class LifestyleController {
-  async create(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  /**
+   * Get or create lifestyle for current user
+   */
+  async get(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const lifestyle = await lifestyleService.create(req.user!.userId, req.body);
-      res.status(201).json({ success: true, data: lifestyle });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async findAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    try {
-      const activeOnly = req.query.activeOnly !== 'false';
-      const lifestyles = await lifestyleService.findByUserId(req.user!.userId, activeOnly);
-      res.json({ success: true, data: lifestyles });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  async findById(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-    try {
-      const lifestyle = await lifestyleService.findById(req.params.id);
+      const lifestyle = await lifestyleService.getOrCreate(req.user!.userId);
       res.json({ success: true, data: lifestyle });
     } catch (error) {
       next(error);
     }
   }
 
+  /**
+   * Update all lifestyle habits at once
+   */
   async update(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      const lifestyle = await lifestyleService.update(req.params.id, req.body);
+      const lifestyle = await lifestyleService.update(req.user!.userId, req.body);
       res.json({ success: true, data: lifestyle });
     } catch (error) {
       next(error);
     }
   }
 
+  /**
+   * Update a single habit
+   */
+  async updateHabit(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+    try {
+      const { category, frequency, notes } = req.body;
+      const lifestyle = await lifestyleService.updateHabit(
+        req.user!.userId,
+        category,
+        frequency,
+        notes
+      );
+      res.json({ success: true, data: lifestyle });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete lifestyle (reset all habits)
+   */
   async delete(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     try {
-      await lifestyleService.delete(req.params.id);
-      res.json({ success: true, message: 'Lifestyle choice deleted successfully' });
+      await lifestyleService.delete(req.user!.userId);
+      res.json({ success: true, message: 'Lifestyle deleted successfully' });
     } catch (error) {
       next(error);
     }

@@ -1,8 +1,60 @@
-import { IsString, IsOptional, IsDate, IsBoolean, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { LifestyleCategory } from '@hakkemni/common';
+import { LifestyleCategory, HabitFrequency } from '@hakkemni/common';
+
+// Habit DTOs
+export class HabitDto {
+  @IsEnum(LifestyleCategory)
+  category!: LifestyleCategory;
+
+  @IsEnum(HabitFrequency)
+  frequency!: HabitFrequency;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
 
 // Request DTOs
+export class UpdateLifestyleDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => HabitDto)
+  habits!: HabitDto[];
+}
+
+// Response DTOs
+export class HabitResponseDto {
+  category!: LifestyleCategory;
+  frequency!: HabitFrequency;
+  notes?: string;
+}
+
+export class LifestyleResponseDto {
+  id!: string;
+  userId!: string;
+  habits!: HabitResponseDto[];
+  isActive!: boolean;
+  createdAt!: Date;
+  updatedAt!: Date;
+}
+
+// Summary for health pass - individual habit summary
+export class HabitSummaryDto {
+  category!: LifestyleCategory;
+  frequency!: HabitFrequency;
+  notes?: string;
+  aiRecommendation?: string;
+  isToggled?: boolean;
+}
+
+// Overall lifestyle summary for health pass
+export class LifestyleSummaryDto {
+  id!: string;
+  habits!: HabitSummaryDto[];
+}
+
+// Deprecated - keeping for backward compatibility during migration
 export class CreateLifestyleDto {
   @IsEnum(LifestyleCategory)
   category!: LifestyleCategory;
@@ -13,63 +65,4 @@ export class CreateLifestyleDto {
   @IsOptional()
   @IsString()
   frequency?: string;
-
-  @IsOptional()
-  @IsDate()
-  @Type(() => Date)
-  startDate?: Date;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
 }
-
-export class UpdateLifestyleDto {
-  @IsOptional()
-  @IsEnum(LifestyleCategory)
-  category?: LifestyleCategory;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  frequency?: string;
-
-  @IsOptional()
-  @IsDate()
-  @Type(() => Date)
-  startDate?: Date;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-}
-
-// Response DTOs
-export class LifestyleResponseDto {
-  id!: string;
-  userId!: string;
-  category!: LifestyleCategory;
-  description!: string;
-  frequency?: string;
-  startDate?: Date;
-  notes?: string;
-  isActive!: boolean;
-  createdAt!: Date;
-  updatedAt!: Date;
-}
-
-export class LifestyleSummaryDto {
-  id!: string;
-  category!: LifestyleCategory;
-  description!: string;
-  frequency?: string;
-  aiRecommendation?: string;
-}
-

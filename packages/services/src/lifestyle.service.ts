@@ -1,36 +1,41 @@
-import { LifestyleModel, Lifestyle } from '@hakkemni/models';
+import { LifestyleModel, Lifestyle, LifestyleHabit as LifestyleHabitModel } from '@hakkemni/models';
 import {
-  CreateLifestyleDto,
   UpdateLifestyleDto,
   LifestyleResponseDto,
-  LifestyleSummaryDto
+  LifestyleSummaryDto,
+  HabitResponseDto,
+  HabitSummaryDto,
+  HabitDto
 } from '@hakkemni/dto';
-import { NotFoundError, LifestyleCategory } from '@hakkemni/common';
+import { NotFoundError, LifestyleCategory, HabitFrequency } from '@hakkemni/common';
 
 export class LifestyleService {
   /**
-   * Create a new lifestyle choice
+   * Get or create lifestyle for a user
    */
-  async create(userId: string, dto: CreateLifestyleDto): Promise<LifestyleResponseDto> {
-    const lifestyle = await LifestyleModel.create({
-      userId,
-      category: dto.category,
-      description: dto.description,
-      frequency: dto.frequency,
-      startDate: dto.startDate,
-      notes: dto.notes
-    });
+  async getOrCreate(userId: string): Promise<LifestyleResponseDto> {
+    let lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
+
+    if (!lifestyle) {
+      // Create a new lifestyle with default habits
+      lifestyle = await LifestyleModel.create({
+        userId,
+        habits: this.getDefaultHabits()
+      });
+    }
 
     return this.toResponseDto(lifestyle);
   }
 
   /**
-   * Find all lifestyle choices for a user
+   * Find lifestyle for a user
    */
-  async findByUserId(userId: string, activeOnly: boolean = true): Promise<LifestyleResponseDto[]> {
-    const query = activeOnly ? { userId, isActive: true } : { userId };
-    const lifestyles = await LifestyleModel.find(query).sort({ createdAt: -1 });
-    return lifestyles.map(l => this.toResponseDto(l));
+  async findByUserId(userId: string): Promise<LifestyleResponseDto | null> {
+    const lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
+    if (!lifestyle) {
+      return null;
+    }
+    return this.toResponseDto(lifestyle);
   }
 
   /**
@@ -39,23 +44,67 @@ export class LifestyleService {
   async findById(id: string): Promise<LifestyleResponseDto> {
     const lifestyle = await LifestyleModel.findById(id);
     if (!lifestyle) {
-      throw new NotFoundError('Lifestyle choice not found');
+      throw new NotFoundError('Lifestyle not found');
     }
     return this.toResponseDto(lifestyle);
   }
 
   /**
-   * Update lifestyle
+   * Update lifestyle habits (upsert - create if not exists)
    */
-  async update(id: string, dto: UpdateLifestyleDto): Promise<LifestyleResponseDto> {
-    const lifestyle = await LifestyleModel.findByIdAndUpdate(
-      id,
-      { $set: dto },
-      { new: true }
-    );
+  async update(userId: string, dto: UpdateLifestyleDto): Promise<LifestyleResponseDto> {
+    let lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
 
     if (!lifestyle) {
-      throw new NotFoundError('Lifestyle choice not found');
+      // Create new lifestyle with provided habits
+      lifestyle = await LifestyleModel.create({
+        userId,
+        habits: dto.habits
+      });
+    } else {
+      // Update existing lifestyle habits
+      lifestyle = await LifestyleModel.findOneAndUpdate(
+        { userId, isActive: true },
+        { $set: { habits: dto.habits } },
+        { new: true }
+      );
+    }
+
+    if (!lifestyle) {
+      throw new NotFoundError('Failed to update lifestyle');
+    }
+
+    return this.toResponseDto(lifestyle);
+  }
+
+  /**
+   * Update a single habit
+   */
+  async updateHabit(userId: string, category: LifestyleCategory, frequency: HabitFrequency, notes?: string): Promise<LifestyleResponseDto> {
+    let lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
+
+    if (!lifestyle) {
+      // Create new lifestyle with this habit
+      lifestyle = await LifestyleModel.create({
+        userId,
+        habits: [{ category, frequency, notes }]
+      });
+    } else {
+      // Check if habit already exists
+      const habitIndex = lifestyle.habits.findIndex(h => h.category === category);
+
+      if (habitIndex >= 0) {
+        // Update existing habit
+        lifestyle.habits[habitIndex].frequency = frequency;
+        if (notes !== undefined) {
+          lifestyle.habits[habitIndex].notes = notes;
+        }
+      } else {
+        // Add new habit
+        lifestyle.habits.push({ category, frequency, notes } as LifestyleHabitModel);
+      }
+
+      await lifestyle.save();
     }
 
     return this.toResponseDto(lifestyle);
@@ -64,44 +113,82 @@ export class LifestyleService {
   /**
    * Soft delete lifestyle
    */
-  async delete(id: string): Promise<void> {
-    const result = await LifestyleModel.findByIdAndUpdate(
-      id,
+  async delete(userId: string): Promise<void> {
+    const result = await LifestyleModel.findOneAndUpdate(
+      { userId, isActive: true },
       { $set: { isActive: false } }
     );
 
     if (!result) {
-      throw new NotFoundError('Lifestyle choice not found');
+      throw new NotFoundError('Lifestyle not found');
     }
   }
 
   /**
-   * Get summaries for health pass
+   * Get summaries for health pass - returns all habits with their frequencies
    */
-  async getSummaries(userId: string, specificIds?: string[]): Promise<LifestyleSummaryDto[]> {
-    let query: any = { userId, isActive: true };
-    if (specificIds && specificIds.length > 0) {
-      query._id = { $in: specificIds };
+  async getSummaries(userId: string, specificCategories?: LifestyleCategory[]): Promise<LifestyleSummaryDto | null> {
+    const lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
+    if (!lifestyle) {
+      return null;
     }
 
-    const lifestyles = await LifestyleModel.find(query);
-    return lifestyles.map(l => ({
-      id: l._id.toString(),
-      category: l.category as LifestyleCategory,
-      description: l.description,
-      frequency: l.frequency
-    }));
+    let habits = lifestyle.habits.filter(h => h.frequency !== HabitFrequency.NOT_SET);
+
+    if (specificCategories && specificCategories.length > 0) {
+      habits = habits.filter(h => specificCategories.includes(h.category));
+    }
+
+    return {
+      id: lifestyle._id.toString(),
+      habits: habits.map(h => ({
+        category: h.category as LifestyleCategory,
+        frequency: h.frequency as HabitFrequency,
+        notes: h.notes
+      }))
+    };
+  }
+
+  /**
+   * Get all habits for a user (used for AI analysis)
+   */
+  async getHabits(userId: string): Promise<HabitResponseDto[]> {
+    const lifestyle = await LifestyleModel.findOne({ userId, isActive: true });
+    if (!lifestyle) {
+      return [];
+    }
+
+    return lifestyle.habits
+      .filter(h => h.frequency !== HabitFrequency.NOT_SET)
+      .map(h => ({
+        category: h.category as LifestyleCategory,
+        frequency: h.frequency as HabitFrequency,
+        notes: h.notes
+      }));
+  }
+
+  /**
+   * Get default habits with NOT_SET frequency
+   */
+  private getDefaultHabits(): HabitDto[] {
+    return [
+      { category: LifestyleCategory.SMOKING, frequency: HabitFrequency.NOT_SET },
+      { category: LifestyleCategory.ALCOHOL, frequency: HabitFrequency.NOT_SET },
+      { category: LifestyleCategory.EXERCISE, frequency: HabitFrequency.NOT_SET },
+      { category: LifestyleCategory.SLEEP, frequency: HabitFrequency.NOT_SET },
+      { category: LifestyleCategory.STRESS, frequency: HabitFrequency.NOT_SET }
+    ];
   }
 
   private toResponseDto(lifestyle: Lifestyle): LifestyleResponseDto {
     return {
       id: lifestyle._id.toString(),
       userId: lifestyle.userId.toString(),
-      category: lifestyle.category as LifestyleCategory,
-      description: lifestyle.description,
-      frequency: lifestyle.frequency,
-      startDate: lifestyle.startDate,
-      notes: lifestyle.notes,
+      habits: lifestyle.habits.map(h => ({
+        category: h.category as LifestyleCategory,
+        frequency: h.frequency as HabitFrequency,
+        notes: h.notes
+      })),
       isActive: lifestyle.isActive,
       createdAt: lifestyle.createdAt,
       updatedAt: lifestyle.updatedAt
@@ -110,4 +197,3 @@ export class LifestyleService {
 }
 
 export const lifestyleService = new LifestyleService();
-

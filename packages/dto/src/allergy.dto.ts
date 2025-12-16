@@ -76,8 +76,8 @@ export class AllergyResponseDto {
 export class AllergySummaryDto {
   id!: string;
   allergen!: string;
-  type!: AllergyType; // AI-inferred
   severity?: AllergySeverity;
+  notes?: string;
   aiRecommendation?: string;
 }
 

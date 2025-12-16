@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { lifestyleController } from '../controllers';
-import { validateBody, validateParams } from '../middleware/validate';
-import { CreateLifestyleDto, UpdateLifestyleDto, IdParamDto } from '@hakkemni/dto';
+import { validateBody } from '../middleware/validate';
+import { UpdateLifestyleDto, HabitDto } from '@hakkemni/dto';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -12,135 +12,138 @@ router.use(authenticate);
 /**
  * @openapi
  * /lifestyles:
- *   post:
+ *   get:
  *     tags: [Lifestyles]
- *     summary: Create a lifestyle choice
+ *     summary: Get current user's lifestyle (creates if not exists)
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User's lifestyle with all habits
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     userId:
+ *                       type: string
+ *                     habits:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           category:
+ *                             type: string
+ *                             enum: [smoking, alcohol, exercise, diet, sleep, stress, other]
+ *                           frequency:
+ *                             type: string
+ *                             enum: [not_set, never, rarely, occasionally, frequently, daily]
+ *                           notes:
+ *                             type: string
+ *   put:
+ *     tags: [Lifestyles]
+ *     summary: Update all lifestyle habits at once
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [category, description]
+ *             required: [habits]
  *             properties:
- *               category:
- *                 type: string
- *                 enum: [smoking, alcohol, exercise, diet, sleep, stress, other]
- *                 example: exercise
- *               description:
- *                 type: string
- *                 example: Regular cardio workout
- *               frequency:
- *                 type: string
- *                 example: 3 times per week
- *               startDate:
- *                 type: string
- *                 format: date
- *               notes:
- *                 type: string
- *     responses:
- *       201:
- *         description: Lifestyle created
- *   get:
- *     tags: [Lifestyles]
- *     summary: Get all lifestyle choices
- *     parameters:
- *       - name: activeOnly
- *         in: query
- *         schema:
- *           type: boolean
- *           default: true
- *     responses:
- *       200:
- *         description: List of lifestyle choices
- */
-router.post(
-  '/',
-  validateBody(CreateLifestyleDto),
-  lifestyleController.create.bind(lifestyleController)
-);
-
-router.get('/', lifestyleController.findAll.bind(lifestyleController));
-
-/**
- * @openapi
- * /lifestyles/{id}:
- *   get:
- *     tags: [Lifestyles]
- *     summary: Get a lifestyle choice by ID
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
+ *               habits:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [category, frequency]
+ *                   properties:
+ *                     category:
+ *                       type: string
+ *                       enum: [smoking, alcohol, exercise, diet, sleep, stress, other]
+ *                       example: smoking
+ *                     frequency:
+ *                       type: string
+ *                       enum: [not_set, never, rarely, occasionally, frequently, daily]
+ *                       example: never
+ *                     notes:
+ *                       type: string
+ *           example:
+ *             habits:
+ *               - category: smoking
+ *                 frequency: never
+ *               - category: alcohol
+ *                 frequency: rarely
+ *               - category: exercise
+ *                 frequency: daily
+ *               - category: sleep
+ *                 frequency: occasionally
+ *               - category: stress
+ *                 frequency: frequently
  *     responses:
  *       200:
- *         description: Lifestyle details
- *       404:
- *         description: Not found
- *   patch:
- *     tags: [Lifestyles]
- *     summary: Update a lifestyle choice
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               category:
- *                 type: string
- *                 enum: [smoking, alcohol, exercise, diet, sleep, stress, other]
- *               description:
- *                 type: string
- *               frequency:
- *                 type: string
- *               startDate:
- *                 type: string
- *                 format: date
- *               notes:
- *                 type: string
- *               isActive:
- *                 type: boolean
- *     responses:
- *       200:
- *         description: Lifestyle updated
+ *         description: Updated lifestyle
  *   delete:
  *     tags: [Lifestyles]
- *     summary: Delete a lifestyle choice
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema:
- *           type: string
+ *     summary: Delete lifestyle (reset all habits)
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Lifestyle deleted
  */
-router.get(
-  '/:id',
-  validateParams(IdParamDto),
-  lifestyleController.findById.bind(lifestyleController)
-);
+router.get('/', lifestyleController.get.bind(lifestyleController));
 
-router.patch(
-  '/:id',
-  validateParams(IdParamDto),
+router.put(
+  '/',
   validateBody(UpdateLifestyleDto),
   lifestyleController.update.bind(lifestyleController)
 );
 
-router.delete(
-  '/:id',
-  validateParams(IdParamDto),
-  lifestyleController.delete.bind(lifestyleController)
+router.delete('/', lifestyleController.delete.bind(lifestyleController));
+
+/**
+ * @openapi
+ * /lifestyles/habit:
+ *   patch:
+ *     tags: [Lifestyles]
+ *     summary: Update a single habit
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [category, frequency]
+ *             properties:
+ *               category:
+ *                 type: string
+ *                 enum: [smoking, alcohol, exercise, diet, sleep, stress, other]
+ *                 example: smoking
+ *               frequency:
+ *                 type: string
+ *                 enum: [not_set, never, rarely, occasionally, frequently, daily]
+ *                 example: never
+ *               notes:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Updated lifestyle with all habits
+ */
+router.patch(
+  '/habit',
+  validateBody(HabitDto),
+  lifestyleController.updateHabit.bind(lifestyleController)
 );
 
-export { router as lifestyleRouter };
+export default router;

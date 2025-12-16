@@ -9,19 +9,20 @@ import {
   HealthPassMedicalConditionItemDto,
   HealthPassMedicationItemDto,
   HealthPassAllergyItemDto,
-  HealthPassLifestyleItemDto,
+  HealthPassHabitItemDto,
   HealthPassDocumentItemDto,
   MedicalConditionResponseDto,
   MedicationResponseDto,
   AllergyResponseDto,
-  LifestyleResponseDto,
+  HabitResponseDto,
   DocumentResponseDto
 } from '@hakkemni/dto';
 import {
   NotFoundError,
   AppointmentSpecialty,
   HealthPassStatus,
-  HEALTH_PASS_EXPIRY_HOURS
+  HEALTH_PASS_EXPIRY_HOURS,
+  LifestyleCategory
 } from '@hakkemni/common';
 import { v4 as uuidv4 } from 'uuid';
 import { userService } from './user.service';
@@ -39,19 +40,19 @@ export class HealthPassService {
    */
   async create(userId: string, dto: CreateHealthPassDto): Promise<HealthPassResponseDto> {
     // Gather all user health data for AI analysis
-    const [user, conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+    const [user, conditions, medications, allergies, habits, documents] = await Promise.all([
       userService.findById(userId),
       medicalConditionService.findByUserId(userId),
       medicationService.findByUserId(userId),
       allergyService.findByUserId(userId),
-      lifestyleService.findByUserId(userId),
+      lifestyleService.getHabits(userId),
       documentService.findByUserId(userId)
     ]);
 
     // Get AI recommendations for which data to share based on appointment type
     const aiSuggestions = await aiService.generateHealthPassRecommendations(
       dto.appointmentSpecialty,
-      { conditions, medications, allergies, lifestyles, documents }
+      { conditions, medications, allergies, habits, documents }
     );
 
     // Generate unique codes
@@ -62,6 +63,7 @@ export class HealthPassService {
     const qrCode = await qrCodeService.generateQrCode(accessCode);
 
     // Build data toggles from AI suggestions (for storage)
+    // For habits, we store the category enum values instead of IDs
     const dataToggles = {
       name: true as const,
       gender: true as const,
@@ -74,7 +76,7 @@ export class HealthPassService {
       specificConditions: aiSuggestions.conditionRecommendations.filter(r => r.isRelevant).map(r => r.id),
       specificMedications: aiSuggestions.medicationRecommendations.filter(r => r.isRelevant).map(r => r.id),
       specificAllergies: aiSuggestions.allergyRecommendations.filter(r => r.isRelevant).map(r => r.id),
-      specificLifestyles: aiSuggestions.lifestyleRecommendations.filter(r => r.isRelevant).map(r => r.id),
+      specificLifestyles: aiSuggestions.habitRecommendations.filter(r => r.isRelevant).map(r => r.id as LifestyleCategory),
       specificDocuments: aiSuggestions.documentRecommendations.filter(r => r.isRelevant).map(r => r.id)
     };
 
@@ -82,7 +84,7 @@ export class HealthPassService {
     const toggledConditions = conditions.filter(c => dataToggles.specificConditions.includes(c.id));
     const toggledMedications = medications.filter(m => dataToggles.specificMedications.includes(m.id));
     const toggledAllergies = allergies.filter(a => dataToggles.specificAllergies.includes(a.id));
-    const toggledLifestyles = lifestyles.filter(l => dataToggles.specificLifestyles.includes(l.id));
+    const toggledHabits = habits.filter(h => dataToggles.specificLifestyles.includes(h.category));
     const toggledDocuments = documents.filter(d => dataToggles.specificDocuments.includes(d.id));
 
     // Generate AI profile summary based on toggled items
@@ -97,14 +99,14 @@ export class HealthPassService {
         conditions: toggledConditions,
         medications: toggledMedications,
         allergies: toggledAllergies,
-        lifestyles: toggledLifestyles,
+        habits: toggledHabits,
         documents: toggledDocuments
       },
       {
         conditions: conditions.length,
         medications: medications.length,
         allergies: allergies.length,
-        lifestyles: lifestyles.length,
+        habits: habits.length,
         documents: documents.length
       }
     );
@@ -124,7 +126,7 @@ export class HealthPassService {
         conditionRecommendations: aiSuggestions.conditionRecommendations,
         medicationRecommendations: aiSuggestions.medicationRecommendations,
         allergyRecommendations: aiSuggestions.allergyRecommendations,
-        lifestyleRecommendations: aiSuggestions.lifestyleRecommendations,
+        habitRecommendations: aiSuggestions.habitRecommendations,
         documentRecommendations: aiSuggestions.documentRecommendations
       },
       expiresAt
@@ -136,7 +138,7 @@ export class HealthPassService {
       conditions,
       medications,
       allergies,
-      lifestyles,
+      habits,
       documents,
       aiSuggestions
     );
@@ -154,11 +156,11 @@ export class HealthPassService {
     const userId = healthPass.userId.toString();
 
     // Fetch all health data
-    const [conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+    const [conditions, medications, allergies, habits, documents] = await Promise.all([
       medicalConditionService.findByUserId(userId),
       medicationService.findByUserId(userId),
       allergyService.findByUserId(userId),
-      lifestyleService.findByUserId(userId),
+      lifestyleService.getHabits(userId),
       documentService.findByUserId(userId)
     ]);
 
@@ -167,7 +169,7 @@ export class HealthPassService {
       conditionRecommendations: healthPass.aiItemRecommendations?.conditionRecommendations || [],
       medicationRecommendations: healthPass.aiItemRecommendations?.medicationRecommendations || [],
       allergyRecommendations: healthPass.aiItemRecommendations?.allergyRecommendations || [],
-      lifestyleRecommendations: healthPass.aiItemRecommendations?.lifestyleRecommendations || [],
+      habitRecommendations: healthPass.aiItemRecommendations?.habitRecommendations || [],
       documentRecommendations: healthPass.aiItemRecommendations?.documentRecommendations || [],
       overallRecommendation: healthPass.aiRecommendations || ''
     };
@@ -177,7 +179,7 @@ export class HealthPassService {
       conditions,
       medications,
       allergies,
-      lifestyles,
+      habits,
       documents,
       aiSuggestions
     );
@@ -217,12 +219,12 @@ export class HealthPassService {
     const toggles = healthPass.dataToggles;
 
     // Fetch user and all health data
-    const [user, conditions, medications, allergies, lifestyles, documents] = await Promise.all([
+    const [user, conditions, medications, allergies, habits, documents] = await Promise.all([
       userService.findById(userId),
       medicalConditionService.findByUserId(userId),
       medicationService.findByUserId(userId),
       allergyService.findByUserId(userId),
-      lifestyleService.findByUserId(userId),
+      lifestyleService.getHabits(userId),
       documentService.findByUserId(userId)
     ]);
 
@@ -279,7 +281,6 @@ export class HealthPassService {
         return {
           id: a.id,
           allergen: a.allergen,
-          type: a.type,
           severity: a.severity,
           notes: a.notes,
           aiRecommendation: rec?.recommendation
@@ -287,16 +288,15 @@ export class HealthPassService {
       });
     }
 
-    // Build lifestyle choices with AI recommendations (only toggled ones)
+    // Build habits with AI recommendations (only toggled categories)
     if (toggles.lifestyleChoices && toggles.specificLifestyles) {
-      const filteredLifestyles = lifestyles.filter(l => toggles.specificLifestyles!.includes(l.id));
-      preview.lifestyleChoices = filteredLifestyles.map(l => {
-        const rec = storedRecommendations?.lifestyleRecommendations?.find(r => r.id === l.id);
+      const filteredHabits = habits.filter(h => toggles.specificLifestyles!.includes(h.category));
+      preview.habits = filteredHabits.map(h => {
+        const rec = storedRecommendations?.habitRecommendations?.find(r => r.id === h.category);
         return {
-          id: l.id,
-          category: l.category,
-          description: l.description,
-          frequency: l.frequency,
+          category: h.category,
+          frequency: h.frequency,
+          notes: h.notes,
           aiRecommendation: rec?.recommendation
         };
       });
@@ -462,7 +462,7 @@ export class HealthPassService {
     conditions: MedicalConditionResponseDto[],
     medications: MedicationResponseDto[],
     allergies: AllergyResponseDto[],
-    lifestyles: LifestyleResponseDto[],
+    habits: HabitResponseDto[],
     documents: DocumentResponseDto[],
     aiSuggestions: AiHealthPassSuggestionsDto
   ): HealthPassResponseDto {
@@ -496,11 +496,11 @@ export class HealthPassService {
       };
     });
 
-    // Map lifestyles with AI recommendations
-    const lifestylesItems: HealthPassLifestyleItemDto[] = lifestyles.map(l => {
-      const rec = aiSuggestions.lifestyleRecommendations.find(r => r.id === l.id);
+    // Map habits with AI recommendations
+    const habitsItems: HealthPassHabitItemDto[] = habits.map(h => {
+      const rec = aiSuggestions.habitRecommendations.find(r => r.id === h.category);
       return {
-        data: l,
+        data: h,
         isRelevant: rec?.isRelevant ?? false,
         aiRecommendation: rec?.recommendation ?? 'Share if relevant to your appointment.'
       };
@@ -528,7 +528,7 @@ export class HealthPassService {
       medicalConditions: medicalConditionsItems,
       medications: medicationsItems,
       allergies: allergiesItems,
-      lifestyles: lifestylesItems,
+      habits: habitsItems,
       documents: documentsItems,
       aiRecommendations: aiSuggestions.overallRecommendation,
       aiProfileSummary: healthPass.aiProfileSummary,

@@ -1,6 +1,6 @@
 import { prop, getModelForClass, modelOptions, Severity, Ref, pre } from '@typegoose/typegoose';
 import { User } from './user.model';
-import { HealthPassStatus, AppointmentSpecialty, HealthPassDataToggles } from '@hakkemni/common';
+import { HealthPassStatus, AppointmentSpecialty, HealthPassDataToggles, LifestyleCategory } from '@hakkemni/common';
 import type { Types } from 'mongoose';
 
 class SharedDataToggles implements HealthPassDataToggles {
@@ -37,8 +37,8 @@ class SharedDataToggles implements HealthPassDataToggles {
   @prop({ type: () => [String] })
   public specificAllergies?: string[];
 
-  @prop({ type: () => [String] })
-  public specificLifestyles?: string[];
+  @prop({ type: () => [String], enum: LifestyleCategory })
+  public specificLifestyles?: LifestyleCategory[];
 
   @prop({ type: () => [String] })
   public specificDocuments?: string[];
@@ -96,7 +96,7 @@ export class HealthPass {
     conditionRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
     medicationRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
     allergyRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
-    lifestyleRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
+    habitRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
     documentRecommendations: { id: string; isRelevant: boolean; recommendation: string }[];
   };
 

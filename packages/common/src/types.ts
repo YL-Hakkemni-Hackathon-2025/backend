@@ -67,6 +67,21 @@ export enum LifestyleCategory {
   OTHER = 'other'
 }
 
+export enum HabitFrequency {
+  NOT_SET = 'not_set',
+  NEVER = 'never',
+  RARELY = 'rarely',
+  OCCASIONALLY = 'occasionally',
+  FREQUENTLY = 'frequently',
+  DAILY = 'daily'
+}
+
+export interface LifestyleHabit {
+  category: LifestyleCategory;
+  frequency: HabitFrequency;
+  notes?: string;
+}
+
 export interface HealthPassDataToggles {
   // Required - cannot be turned off
   name: true;
@@ -84,7 +99,7 @@ export interface HealthPassDataToggles {
   specificConditions?: string[];
   specificMedications?: string[];
   specificAllergies?: string[];
-  specificLifestyles?: string[];
+  specificLifestyles?: LifestyleCategory[]; // Now uses category enum instead of IDs
   specificDocuments?: string[];
 }
 

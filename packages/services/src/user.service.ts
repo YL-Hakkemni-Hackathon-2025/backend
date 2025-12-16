@@ -107,11 +107,11 @@ export class UserService {
     }
 
     // Fetch all health data in parallel
-    const [medicalConditions, medications, allergies, lifestyles, documents] = await Promise.all([
+    const [medicalConditions, medications, allergies, lifestyle, documents] = await Promise.all([
       medicalConditionService.findByUserId(id, true),
       medicationService.findByUserId(id, true),
       allergyService.findByUserId(id, true),
-      lifestyleService.findByUserId(id, true),
+      lifestyleService.findByUserId(id),
       documentService.findByUserId(id, true)
     ]);
 
@@ -127,7 +127,7 @@ export class UserService {
       medicalConditions,
       medications,
       allergies,
-      lifestyles,
+      lifestyle,
       documents
     };
   }
