@@ -31,8 +31,8 @@ export class Medication {
   @prop({ required: true, enum: MedicationFrequency })
   public frequency!: MedicationFrequency;
 
-  @prop({ required: true })
-  public startDate!: Date;
+  @prop()
+  public startDate?: Date;
 
   @prop()
   public endDate?: Date;

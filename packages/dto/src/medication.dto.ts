@@ -13,9 +13,10 @@ export class CreateMedicationDto {
   @IsEnum(MedicationFrequency)
   frequency!: MedicationFrequency;
 
+  @IsOptional()
   @IsDate()
   @Type(() => Date)
-  startDate!: Date;
+  startDate?: Date;
 
   @IsOptional()
   @IsDate()
@@ -66,7 +67,7 @@ export class MedicationResponseDto {
   medicationName!: string;
   dosageAmount!: string;
   frequency!: MedicationFrequency;
-  startDate!: Date;
+  startDate?: Date;
   endDate?: Date;
   notes?: string;
   isActive!: boolean;
